@@ -39,14 +39,17 @@
 #include "compiler/glsl/glsl_to_nir.h"
 #include "compiler/nir_types.h"
 
-static void dump_info(struct ir3_shader_variant *so, const char *str)
+static int
+midgard_compile_shader_nir(nir_shader *nir)
 {
-	uint32_t *bin;
-	const char *type = ir3_shader_stage(so->shader);
-	bin = ir3_shader_assemble(so);
-	debug_printf("; %s: %s\n", type, str);
-	ir3_shader_disasm(so, bin);
-	free(bin);
+	printf("TODO: Compile from nir :)\n");
+	return 0;
+}
+
+static int
+midgard_glsl_type_size(const struct glsl_type *type)
+{
+	return glsl_count_attribute_slots(type, false);
 }
 
 static void
@@ -116,7 +119,7 @@ load_glsl(unsigned num_files, char* const* files, gl_shader_stage stage)
 	if (!prog)
 		errx(1, "couldn't parse `%s'", files[0]);
 
-	nir_shader *nir = glsl_to_nir(prog, stage, nir_options);
+	nir_shader *nir = glsl_to_nir(prog, stage, &nir_options);
 
 	/* required NIR passes: */
 	/* TODO cmdline args for some of the conditional lowering passes? */
@@ -136,7 +139,7 @@ load_glsl(unsigned num_files, char* const* files, gl_shader_stage stage)
 	case MESA_SHADER_VERTEX:
 		nir_assign_var_locations(&nir->inputs,
 				&nir->num_inputs,
-				ir3_glsl_type_size);
+				midgard_glsl_type_size);
 
 		/* Re-lower global vars, to deal with any dead VS inputs. */
 		NIR_PASS_V(nir, nir_lower_global_vars_to_local);
@@ -144,18 +147,18 @@ load_glsl(unsigned num_files, char* const* files, gl_shader_stage stage)
 		sort_varyings(&nir->outputs);
 		nir_assign_var_locations(&nir->outputs,
 				&nir->num_outputs,
-				ir3_glsl_type_size);
+				midgard_glsl_type_size);
 		fixup_varying_slots(&nir->outputs);
 		break;
 	case MESA_SHADER_FRAGMENT:
 		sort_varyings(&nir->inputs);
 		nir_assign_var_locations(&nir->inputs,
 				&nir->num_inputs,
-				ir3_glsl_type_size);
+				midgard_glsl_type_size);
 		fixup_varying_slots(&nir->inputs);
 		nir_assign_var_locations(&nir->outputs,
 				&nir->num_outputs,
-				ir3_glsl_type_size);
+				midgard_glsl_type_size);
 		break;
 	default:
 		errx(1, "unhandled shader stage: %d", stage);
@@ -163,57 +166,18 @@ load_glsl(unsigned num_files, char* const* files, gl_shader_stage stage)
 
 	nir_assign_var_locations(&nir->uniforms,
 			&nir->num_uniforms,
-			ir3_glsl_type_size);
+			midgard_glsl_type_size);
 
 	NIR_PASS_V(nir, nir_lower_system_values);
-	NIR_PASS_V(nir, nir_lower_io, nir_var_all, ir3_glsl_type_size, 0);
+	NIR_PASS_V(nir, nir_lower_io, nir_var_all, midgard_glsl_type_size, 0);
 	NIR_PASS_V(nir, nir_lower_samplers, prog);
 
 	return nir;
 }
 
-static int
-read_file(const char *filename, void **ptr, size_t *size)
-{
-	int fd, ret;
-	struct stat st;
-
-	*ptr = MAP_FAILED;
-
-	fd = open(filename, O_RDONLY);
-	if (fd == -1) {
-		warnx("couldn't open `%s'", filename);
-		return 1;
-	}
-
-	ret = fstat(fd, &st);
-	if (ret)
-		errx(1, "couldn't stat `%s'", filename);
-
-	*size = st.st_size;
-	*ptr = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
-	if (*ptr == MAP_FAILED)
-		errx(1, "couldn't map `%s'", filename);
-
-	close(fd);
-
-	return 0;
-}
-
 static void print_usage(void)
 {
 	printf("Usage: midgard_compiler [OPTIONS]... <(file.vert | file.frag)*>\n");
-	printf("    --verbose         - verbose compiler/debug messages\n");
-	printf("    --binning-pass    - generate binning pass shader (VERT)\n");
-	printf("    --color-two-side  - emulate two-sided color (FRAG)\n");
-	printf("    --half-precision  - use half-precision\n");
-	printf("    --saturate-s MASK - bitmask of samplers to saturate S coord\n");
-	printf("    --saturate-t MASK - bitmask of samplers to saturate T coord\n");
-	printf("    --saturate-r MASK - bitmask of samplers to saturate R coord\n");
-	printf("    --astc-srgb MASK  - bitmask of samplers to enable astc-srgb workaround\n");
-	printf("    --stream-out      - enable stream-out (aka transform feedback)\n");
-	printf("    --ucp MASK        - bitmask of enabled user-clip-planes\n");
-	printf("    --help            - show this message\n");
 }
 
 int main(int argc, char **argv)
@@ -222,112 +186,6 @@ int main(int argc, char **argv)
 	char *filenames[2];
 	int num_files = 0;
 	unsigned stage = 0;
-	struct ir3_shader_variant v;
-	struct ir3_shader s;
-	struct ir3_shader_key key = {};
-	const char *info;
-	void *ptr;
-	size_t size;
-
-	memset(&s, 0, sizeof(s));
-	memset(&v, 0, sizeof(v));
-
-	/* cmdline args which impact shader variant get spit out in a
-	 * comment on the first line..  a quick/dirty way to preserve
-	 * that info so when ir3test recompiles the shader with a new
-	 * compiler version, we use the same shader-key settings:
-	 */
-	debug_printf("; options:");
-
-	while (n < argc) {
-		if (!strcmp(argv[n], "--verbose")) {
-			fd_mesa_debug |= FD_DBG_MSGS | FD_DBG_OPTMSGS | FD_DBG_DISASM;
-			n++;
-			continue;
-		}
-
-		if (!strcmp(argv[n], "--binning-pass")) {
-			debug_printf(" %s", argv[n]);
-			key.binning_pass = true;
-			n++;
-			continue;
-		}
-
-		if (!strcmp(argv[n], "--color-two-side")) {
-			debug_printf(" %s", argv[n]);
-			key.color_two_side = true;
-			n++;
-			continue;
-		}
-
-		if (!strcmp(argv[n], "--half-precision")) {
-			debug_printf(" %s", argv[n]);
-			key.half_precision = true;
-			n++;
-			continue;
-		}
-
-		if (!strcmp(argv[n], "--saturate-s")) {
-			debug_printf(" %s %s", argv[n], argv[n+1]);
-			key.vsaturate_s = key.fsaturate_s = strtol(argv[n+1], NULL, 0);
-			n += 2;
-			continue;
-		}
-
-		if (!strcmp(argv[n], "--saturate-t")) {
-			debug_printf(" %s %s", argv[n], argv[n+1]);
-			key.vsaturate_t = key.fsaturate_t = strtol(argv[n+1], NULL, 0);
-			n += 2;
-			continue;
-		}
-
-		if (!strcmp(argv[n], "--saturate-r")) {
-			debug_printf(" %s %s", argv[n], argv[n+1]);
-			key.vsaturate_r = key.fsaturate_r = strtol(argv[n+1], NULL, 0);
-			n += 2;
-			continue;
-		}
-
-		if (!strcmp(argv[n], "--astc-srgb")) {
-			debug_printf(" %s %s", argv[n], argv[n+1]);
-			key.vastc_srgb = key.fastc_srgb = strtol(argv[n+1], NULL, 0);
-			n += 2;
-			continue;
-		}
-
-		if (!strcmp(argv[n], "--stream-out")) {
-			struct pipe_stream_output_info *so = &s.stream_output;
-			debug_printf(" %s", argv[n]);
-			/* TODO more dynamic config based on number of outputs, etc
-			 * rather than just hard-code for first output:
-			 */
-			so->num_outputs = 1;
-			so->stride[0] = 4;
-			so->output[0].register_index = 0;
-			so->output[0].start_component = 0;
-			so->output[0].num_components = 4;
-			so->output[0].output_buffer = 0;
-			so->output[0].dst_offset = 2;
-			so->output[0].stream = 0;
-			n++;
-			continue;
-		}
-
-		if (!strcmp(argv[n], "--ucp")) {
-			debug_printf(" %s %s", argv[n], argv[n+1]);
-			key.ucp_enables = strtol(argv[n+1], NULL, 0);
-			n += 2;
-			continue;
-		}
-
-		if (!strcmp(argv[n], "--help")) {
-			print_usage();
-			return 0;
-		}
-
-		break;
-	}
-	debug_printf("\n");
 
 	while (n < argc) {
 		char *filename = argv[n];
@@ -360,31 +218,9 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	s.compiler = compiler;
-	s.nir = ir3_optimize_nir(&s, nir, NULL);
-
-	v.key = key;
-	v.shader = &s;
-
-	switch (nir->info.stage) {
-	case MESA_SHADER_FRAGMENT:
-		s.type = v.type = SHADER_FRAGMENT;
-		break;
-	case MESA_SHADER_VERTEX:
-		s.type = v.type = SHADER_VERTEX;
-		break;
-	case MESA_SHADER_COMPUTE:
-		s.type = v.type = SHADER_COMPUTE;
-		break;
-	default:
-		errx(1, "unhandled shader stage: %d", nir->info.stage);
-	}
-
-	info = "NIR compiler";
-	ret = ir3_compile_shader_nir(s.compiler, &v);
+	ret = midgard_compile_shader_nir(nir);
 	if (ret) {
 		fprintf(stderr, "compiler failed!\n");
 		return ret;
 	}
-	dump_info(&v, info);
 }
