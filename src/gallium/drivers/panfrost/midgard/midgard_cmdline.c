@@ -43,6 +43,25 @@ static int
 midgard_compile_shader_nir(nir_shader *nir)
 {
 	printf("TODO: Compile from nir :)\n");
+
+	nir_foreach_function(func, nir) {
+		printf("Function: %s\n", func->name);
+
+		nir_function_impl *impl = func->impl;
+
+		if (!impl) {
+			printf("No implementation?\n");
+			break;
+		}
+
+		nir_foreach_block(block, impl) {
+			nir_foreach_instr(instr, block) {
+				nir_print_instr(instr, stdout);
+				putchar('\n');
+			}
+		}
+	}
+
 	nir_print_shader(nir, stdout);
 	return 0;
 }
