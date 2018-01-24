@@ -90,12 +90,35 @@ get_src(nir_src src)
 }
 
 static void
+get_dest(nir_dest src)
+{
+	if (src.is_ssa) {
+		printf("SSA index: %d\n", src.ssa.index);
+	} else {
+		printf("Reg offset: %d\n", src.reg.base_offset);
+	}
+}
+
+static void
 emit_intrinsic(nir_intrinsic_instr *instr)
 {
         nir_const_value *const_offset;
         unsigned offset;
 
 	switch(instr->intrinsic) {
+		case nir_intrinsic_load_uniform:
+			const_offset = nir_src_as_const_value(instr->src[0]);
+			assert (const_offset && "no indirect inputs");
+
+			offset = nir_intrinsic_base(instr) + const_offset->u32[0];
+			assert(offset % 4 == 0);
+			offset = offset / 4;
+
+			printf("Load uniform offset %d\n", offset);
+			get_dest(instr->dest);
+
+			break;
+
 		case nir_intrinsic_store_output:
 			const_offset = nir_src_as_const_value(instr->src[1]);
 			assert(const_offset && "no indirect outputs");
