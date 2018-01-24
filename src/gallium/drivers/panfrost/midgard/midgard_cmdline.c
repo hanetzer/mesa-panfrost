@@ -47,49 +47,6 @@ midgard_compile_shader_nir(nir_shader *nir)
 	return 0;
 }
 
-static int
-midgard_glsl_type_size(const struct glsl_type *type)
-{
-	return glsl_count_attribute_slots(type, false);
-}
-
-static void
-insert_sorted(struct exec_list *var_list, nir_variable *new_var)
-{
-	nir_foreach_variable(var, var_list) {
-		if (var->data.location > new_var->data.location) {
-			exec_node_insert_node_before(&var->node, &new_var->node);
-			return;
-		}
-	}
-	exec_list_push_tail(var_list, &new_var->node);
-}
-
-static void
-sort_varyings(struct exec_list *var_list)
-{
-	struct exec_list new_list;
-	exec_list_make_empty(&new_list);
-	nir_foreach_variable_safe(var, var_list) {
-		exec_node_remove(&var->node);
-		insert_sorted(&new_list, var);
-	}
-	exec_list_move_nodes_to(&new_list, var_list);
-}
-
-static void
-fixup_varying_slots(struct exec_list *var_list)
-{
-	nir_foreach_variable(var, var_list) {
-		if (var->data.location >= VARYING_SLOT_VAR0) {
-			var->data.location += 9;
-		} else if ((var->data.location >= VARYING_SLOT_TEX0) &&
-				(var->data.location <= VARYING_SLOT_TEX7)) {
-			var->data.location += VARYING_SLOT_VAR0 - VARYING_SLOT_TEX0;
-		}
-	}
-}
-
 static const nir_shader_compiler_options nir_options = {
 		.lower_fpow = true,
 		.lower_fsat = true,
