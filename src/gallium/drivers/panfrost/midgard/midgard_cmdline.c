@@ -177,14 +177,17 @@ int main(int argc, char **argv)
 		.do_link = true,
 	};
 
-	if (argc != 2) {
-		printf("Must pass exactly one GLSL file\n");
+	if (argc != 3) {
+		printf("Must pass exactly two GLSL files\n");
 		exit(1);
 	}
 
-	prog = standalone_compile_shader(&options, 1, &argv[1]);
+	prog = standalone_compile_shader(&options, 2, &argv[1]);
 	prog->_LinkedShaders[MESA_SHADER_FRAGMENT]->Program->info.stage = MESA_SHADER_FRAGMENT;
-	nir = glsl_to_nir(prog, MESA_SHADER_FRAGMENT, &nir_options);
 
+	nir = glsl_to_nir(prog, MESA_SHADER_FRAGMENT, &nir_options);
+	midgard_compile_shader_nir(nir);
+
+	nir = glsl_to_nir(prog, MESA_SHADER_VERTEX, &nir_options);
 	midgard_compile_shader_nir(nir);
 }
