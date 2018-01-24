@@ -51,6 +51,10 @@ optimise_nir(nir_shader *nir)
 	/* TODO: Proper optimisation loop */
 
 	NIR_PASS_V(nir, nir_lower_vars_to_ssa);
+
+	/* Midgard does not support I/O->I/O copies; lower these */
+	NIR_PASS_V(nir, nir_lower_var_copies);
+
 	NIR_PASS_V(nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
 	NIR_PASS_V(nir, nir_copy_prop);
 	NIR_PASS_V(nir, nir_opt_dce);
