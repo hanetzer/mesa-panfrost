@@ -43,6 +43,9 @@
 
 typedef struct midgard_instruction {
 	midgard_word_type type; /* ALU, load/store, texture */
+	union {
+		midgard_load_store_word_t load_store;
+	};
 } midgard_instruction;
 
 typedef struct compiler_context {
@@ -132,6 +135,11 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			get_dest(instr->dest);
 
 			{midgard_instruction ins = { .type = TAG_LOAD_STORE_4 };
+			ins.load_store.op = midgard_op_load_uniform_32; /* or 16? */
+			ins.load_store.reg = 0; /* TODO */
+			ins.load_store.mask = 0xF; /* TODO */
+			ins.load_store.swizzle = 0xFF; /* TODO */
+			ins.load_store.address = 0; /* TODO */
 			util_dynarray_append(&ctx->current_block, midgard_instruction, ins);}
 
 			break;
@@ -221,6 +229,9 @@ midgard_compile_shader_nir(nir_shader *nir)
 			util_dynarray_foreach(&ctx.current_block, midgard_instruction, ins) {
 				switch(ins->type) {
 					case TAG_ALU_4:
+					case TAG_ALU_8:
+					case TAG_ALU_12:
+					case TAG_ALU_16:
 						printf("ALU instruction\n");
 						break;
 					default:
