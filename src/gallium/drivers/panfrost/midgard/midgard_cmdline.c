@@ -39,6 +39,10 @@
 #include "compiler/nir_types.h"
 #include "main/imports.h"
 
+typedef struct compiler_context {
+	/* TODO */
+} compiler_context;
+
 static int
 glsl_type_size(const struct glsl_type *type)
 {
@@ -62,7 +66,7 @@ optimise_nir(nir_shader *nir)
 }
 
 static void
-emit_load_const(nir_load_const_instr *instr)
+emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 {
 	nir_ssa_def def = instr->def;
 
@@ -100,7 +104,7 @@ get_dest(nir_dest src)
 }
 
 static void
-emit_intrinsic(nir_intrinsic_instr *instr)
+emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 {
         nir_const_value *const_offset;
         unsigned offset;
@@ -138,18 +142,18 @@ emit_intrinsic(nir_intrinsic_instr *instr)
 }
 
 static void
-emit_instr(struct nir_instr *instr)
+emit_instr(compiler_context *ctx, struct nir_instr *instr)
 {
 	nir_print_instr(instr, stdout);
 	putchar('\n');
 
 	switch(instr->type) {
 		case nir_instr_type_load_const:
-			emit_load_const(nir_instr_as_load_const(instr));
+			emit_load_const(ctx, nir_instr_as_load_const(instr));
 			break;
 
 		case nir_instr_type_intrinsic:
-			emit_intrinsic(nir_instr_as_intrinsic(instr));
+			emit_intrinsic(ctx, nir_instr_as_intrinsic(instr));
 			break;
 		default:
 			printf("Unhandled instruction type\n");
@@ -160,6 +164,8 @@ emit_instr(struct nir_instr *instr)
 static int
 midgard_compile_shader_nir(nir_shader *nir)
 {
+	compiler_context ctx;
+
 	optimise_nir(nir);
 
 	nir_foreach_function(func, nir) {
@@ -168,7 +174,7 @@ midgard_compile_shader_nir(nir_shader *nir)
 
 		nir_foreach_block(block, func->impl) {
 			nir_foreach_instr(instr, block) {
-				emit_instr(instr);
+				emit_instr(&ctx, instr);
 			}
 		}
 	}
