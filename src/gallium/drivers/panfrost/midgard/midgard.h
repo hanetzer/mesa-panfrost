@@ -200,3 +200,12 @@ __attribute__((__packed__))
 	uint64_t word1     : 60;
 	uint64_t word2     : 60;
 } midgard_load_store_t;
+
+/* Some defines not found in the disassembler */
+
+#define TAG_TEXTURE_4 0x3
+#define TAG_LOAD_STORE_4 0x5
+#define TAG_ALU_4 0x8
+#define TAG_ALU_8 0x9
+#define TAG_ALU_12 0xA
+#define TAG_ALU_16 0xB
