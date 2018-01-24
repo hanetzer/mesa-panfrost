@@ -234,6 +234,9 @@ midgard_compile_shader_nir(nir_shader *nir)
 					case TAG_ALU_16:
 						printf("ALU instruction\n");
 						break;
+					case TAG_LOAD_STORE_4:
+						printf("Load store\n");
+						printf("Op: %d\n", ins->load_store.op);
 					default:
 						printf("Unknown midgard instruction type\n");
 						break;
