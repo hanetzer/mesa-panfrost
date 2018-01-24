@@ -43,6 +43,7 @@ static int
 midgard_compile_shader_nir(nir_shader *nir)
 {
 	printf("TODO: Compile from nir :)\n");
+	nir_print_shader(nir, stdout);
 	return 0;
 }
 
@@ -120,57 +121,6 @@ load_glsl(unsigned num_files, char* const* files, gl_shader_stage stage)
 		errx(1, "couldn't parse `%s'", files[0]);
 
 	nir_shader *nir = glsl_to_nir(prog, stage, &nir_options);
-
-	/* required NIR passes: */
-	/* TODO cmdline args for some of the conditional lowering passes? */
-
-	NIR_PASS_V(nir, nir_lower_io_to_temporaries,
-			nir_shader_get_entrypoint(nir),
-			true, true);
-	NIR_PASS_V(nir, nir_lower_global_vars_to_local);
-	NIR_PASS_V(nir, nir_split_var_copies);
-	NIR_PASS_V(nir, nir_lower_var_copies);
-
-	NIR_PASS_V(nir, nir_split_var_copies);
-	NIR_PASS_V(nir, nir_lower_var_copies);
-	NIR_PASS_V(nir, nir_lower_io_types);
-
-	switch (stage) {
-	case MESA_SHADER_VERTEX:
-		nir_assign_var_locations(&nir->inputs,
-				&nir->num_inputs,
-				midgard_glsl_type_size);
-
-		/* Re-lower global vars, to deal with any dead VS inputs. */
-		NIR_PASS_V(nir, nir_lower_global_vars_to_local);
-
-		sort_varyings(&nir->outputs);
-		nir_assign_var_locations(&nir->outputs,
-				&nir->num_outputs,
-				midgard_glsl_type_size);
-		fixup_varying_slots(&nir->outputs);
-		break;
-	case MESA_SHADER_FRAGMENT:
-		sort_varyings(&nir->inputs);
-		nir_assign_var_locations(&nir->inputs,
-				&nir->num_inputs,
-				midgard_glsl_type_size);
-		fixup_varying_slots(&nir->inputs);
-		nir_assign_var_locations(&nir->outputs,
-				&nir->num_outputs,
-				midgard_glsl_type_size);
-		break;
-	default:
-		errx(1, "unhandled shader stage: %d", stage);
-	}
-
-	nir_assign_var_locations(&nir->uniforms,
-			&nir->num_uniforms,
-			midgard_glsl_type_size);
-
-	NIR_PASS_V(nir, nir_lower_system_values);
-	NIR_PASS_V(nir, nir_lower_io, nir_var_all, midgard_glsl_type_size, 0);
-	NIR_PASS_V(nir, nir_lower_samplers, prog);
 
 	return nir;
 }
