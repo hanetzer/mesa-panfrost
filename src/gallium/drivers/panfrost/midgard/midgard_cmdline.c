@@ -42,7 +42,7 @@
 #include "midgard.h"
 
 typedef struct midgard_instruction {
-	midgard_word_type_e type; /* ALU, load/store, texture */
+	midgard_word_type type; /* ALU, load/store, texture */
 } midgard_instruction;
 
 typedef struct compiler_context {
@@ -86,7 +86,7 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 			instr->value.f32[2],
 			instr->value.f32[3]);
 
-		midgard_instruction ins = { .type = midgard_word_type_alu };
+		midgard_instruction ins = { .type = TAG_ALU_4 };
 		util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 	} else {
 		printf("Unknown configuration in load_const %d x %d\n", def.num_components, def.bit_size);
@@ -131,6 +131,9 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			printf("Load uniform offset %d\n", offset);
 			get_dest(instr->dest);
 
+			{midgard_instruction ins = { .type = TAG_LOAD_STORE_4 };
+			util_dynarray_append(&ctx->current_block, midgard_instruction, ins);}
+
 			break;
 
 		case nir_intrinsic_store_output:
@@ -143,6 +146,9 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			get_src(instr->src[0]);
 
 			printf("Store output to offset %d\n", offset);
+
+			{midgard_instruction ins = { .type = TAG_LOAD_STORE_4 };
+			util_dynarray_append(&ctx->current_block, midgard_instruction, ins);}
 
 			break;
 
@@ -176,17 +182,22 @@ emit_instr(compiler_context *ctx, struct nir_instr *instr)
  * if this is the second to last and the last is an ALU, then it's also 1... */
 
 #define IN_ARRAY(n, arr) ((void*)n < (void*)(arr.data + arr.size))
+#define IS_ALU(tag) (tag == TAG_ALU_4 || tag == TAG_ALU_8 ||  \
+		     tag == TAG_ALU_12 || tag == TAG_ALU_16)
 
 static int
 get_lookahead_type(struct util_dynarray block, midgard_instruction *ins)
 {
 	midgard_instruction *n = ins + 1;
 
-	if (IN_ARRAY(n    , block) &&
-	   (IN_ARRAY(n + 1, block) || n->type != midgard_word_type_alu))
+	if (IN_ARRAY(n, block)) {
+		if (!IN_ARRAY(n + 1, block) && IS_ALU(n->type))
+			return 1;
+
 		return n->type;
-	else
-		return 1;
+	}
+
+	return 1;
 }
 
 static int
@@ -209,7 +220,7 @@ midgard_compile_shader_nir(nir_shader *nir)
 
 			util_dynarray_foreach(&ctx.current_block, midgard_instruction, ins) {
 				switch(ins->type) {
-					case midgard_word_type_alu:
+					case TAG_ALU_4:
 						printf("ALU instruction\n");
 						break;
 					default:

@@ -26,13 +26,7 @@
 
 /* midgard.h - definitions for the Midgard shader architecture */
 
-typedef enum
-{
-	midgard_word_type_alu,
-	midgard_word_type_load_store,
-	midgard_word_type_texture,
-	midgard_word_type_unknown
-} midgard_word_type_e;
+typedef unsigned midgard_word_type;
 
 typedef enum
 {
