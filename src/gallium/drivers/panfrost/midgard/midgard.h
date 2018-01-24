@@ -197,9 +197,6 @@ __attribute__((__packed__))
 typedef struct
 __attribute__((__packed__))
 {
-	unsigned type      : 4;
-	unsigned next_type : 4;
 	uint64_t word1     : 60;
 	uint64_t word2     : 60;
 } midgard_load_store_t;
-
