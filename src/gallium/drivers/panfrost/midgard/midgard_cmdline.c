@@ -39,8 +39,14 @@
 #include "compiler/nir_types.h"
 #include "main/imports.h"
 
+typedef struct midgard_instruction {
+	int i;
+} midgard_instruction;
+
 typedef struct compiler_context {
-	/* TODO */
+	/* List of midgard_instructions emitted for the current block */
+
+	struct util_dynarray current_block;
 } compiler_context;
 
 static int
@@ -78,6 +84,8 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 			instr->value.f32[2],
 			instr->value.f32[3]);
 
+		midgard_instruction i = { .i = 42 };
+		util_dynarray_append(&ctx->current_block, midgard_instruction, i);
 	} else {
 		printf("Unknown configuration in load_const %d x %d\n", def.num_components, def.bit_size);
 	}
@@ -173,9 +181,17 @@ midgard_compile_shader_nir(nir_shader *nir)
 			continue;
 
 		nir_foreach_block(block, func->impl) {
+			util_dynarray_init(&ctx.current_block, NULL);
+
 			nir_foreach_instr(instr, block) {
 				emit_instr(&ctx, instr);
 			}
+
+			util_dynarray_foreach(&ctx.current_block, midgard_instruction, instr) {
+				printf("Instruction: %d\n", instr->i);
+			}
+
+			util_dynarray_fini(&ctx.current_block);
 		}
 	}
 
