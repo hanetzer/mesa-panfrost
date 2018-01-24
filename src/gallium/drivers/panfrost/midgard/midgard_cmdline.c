@@ -1,6 +1,9 @@
 /*
  * Copyright (C) 2018 Alyssa Rosenzweig <alyssa@rosenzweig.io>
+ *
  * Copyright (C) 2014 Rob Clark <robclark@freedesktop.org>
+ * Copyright (c) 2014 Scott Mansell
+ * Copyright © 2014 Broadcom
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -20,10 +23,6 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- *
- * Authors:
- *    Alyssa Rosenzweig <alyssa@rosenzweig.io>
- *    Rob Clark <robclark@freedesktop.org>
  */
 
 #include <sys/types.h>
@@ -40,12 +39,19 @@
 #include "compiler/nir_types.h"
 #include "main/imports.h"
 
+static int
+glsl_type_size(const struct glsl_type *type)
+{
+	return glsl_count_attribute_slots(type, false);
+}
+
 static void
 optimise_nir(nir_shader *nir)
 {
 	/* TODO: Proper optimisation loop */
 
 	NIR_PASS_V(nir, nir_lower_vars_to_ssa);
+	NIR_PASS_V(nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
 	NIR_PASS_V(nir, nir_copy_prop);
 	NIR_PASS_V(nir, nir_opt_dce);
 	NIR_PASS_V(nir, nir_convert_from_ssa, false);
@@ -70,6 +76,41 @@ emit_load_const(nir_load_const_instr *instr)
 }
 
 static void
+get_src(nir_src src)
+{
+	if (src.is_ssa) {
+		printf("SSA index: %d\n", src.ssa->index);
+	} else {
+		printf("Reg offset: %d\n", src.reg.base_offset);
+	}
+}
+
+static void
+emit_intrinsic(nir_intrinsic_instr *instr)
+{
+        nir_const_value *const_offset;
+        unsigned offset;
+
+	switch(instr->intrinsic) {
+		case nir_intrinsic_store_output:
+			const_offset = nir_src_as_const_value(instr->src[1]);
+			assert(const_offset && "no indirect outputs");
+
+			offset = nir_intrinsic_base(instr) + const_offset->u32[0];
+			offset = offset * 4 + nir_intrinsic_component(instr);
+
+			get_src(instr->src[0]);
+
+			printf("Store output to offset %d\n", offset);
+
+			break;
+
+		default:
+			printf ("Unhandled intrinsic\n");
+	}
+}
+
+static void
 emit_instr(struct nir_instr *instr)
 {
 	nir_print_instr(instr, stdout);
@@ -78,6 +119,10 @@ emit_instr(struct nir_instr *instr)
 	switch(instr->type) {
 		case nir_instr_type_load_const:
 			emit_load_const(nir_instr_as_load_const(instr));
+			break;
+
+		case nir_instr_type_intrinsic:
+			emit_intrinsic(nir_instr_as_intrinsic(instr));
 			break;
 		default:
 			printf("Unhandled instruction type\n");
