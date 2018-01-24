@@ -40,17 +40,63 @@
 #include "compiler/nir_types.h"
 #include "main/imports.h"
 
+static void
+optimise_nir(nir_shader *nir)
+{
+	/* TODO: Proper optimisation loop */
+
+	NIR_PASS_V(nir, nir_lower_vars_to_ssa);
+	NIR_PASS_V(nir, nir_copy_prop);
+	NIR_PASS_V(nir, nir_opt_dce);
+	NIR_PASS_V(nir, nir_convert_from_ssa, false);
+}
+
+static void
+emit_load_const(nir_load_const_instr *instr)
+{
+	nir_ssa_def def = instr->def;
+
+	if (def.num_components == 4 && def.bit_size == 32) {
+		printf("Vector ALU with inline constant\n");
+		printf("<%f, %f, %f, %f>\n",
+			instr->value.f32[0],
+			instr->value.f32[1],
+			instr->value.f32[2],
+			instr->value.f32[3]);
+
+	} else {
+		printf("Unknown configuration in load_const %d x %d\n", def.num_components, def.bit_size);
+	}
+}
+
+static void
+emit_instr(struct nir_instr *instr)
+{
+	nir_print_instr(instr, stdout);
+	putchar('\n');
+
+	switch(instr->type) {
+		case nir_instr_type_load_const:
+			emit_load_const(nir_instr_as_load_const(instr));
+			break;
+		default:
+			printf("Unhandled instruction type\n");
+			break;
+	}
+}
+
 static int
 midgard_compile_shader_nir(nir_shader *nir)
 {
+	optimise_nir(nir);
+
 	nir_foreach_function(func, nir) {
 		if (!func->impl)
 			continue;
 
 		nir_foreach_block(block, func->impl) {
 			nir_foreach_instr(instr, block) {
-				nir_print_instr(instr, stdout);
-				putchar('\n');
+				emit_instr(instr);
 			}
 		}
 	}
