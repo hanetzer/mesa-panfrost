@@ -39,8 +39,10 @@
 #include "compiler/nir_types.h"
 #include "main/imports.h"
 
+#include "midgard.h"
+
 typedef struct midgard_instruction {
-	int i;
+	midgard_word_type_e type; /* ALU, load/store, texture */
 } midgard_instruction;
 
 typedef struct compiler_context {
@@ -84,8 +86,8 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 			instr->value.f32[2],
 			instr->value.f32[3]);
 
-		midgard_instruction i = { .i = 42 };
-		util_dynarray_append(&ctx->current_block, midgard_instruction, i);
+		midgard_instruction ins = { .type = midgard_word_type_alu };
+		util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 	} else {
 		printf("Unknown configuration in load_const %d x %d\n", def.num_components, def.bit_size);
 	}
@@ -187,8 +189,15 @@ midgard_compile_shader_nir(nir_shader *nir)
 				emit_instr(&ctx, instr);
 			}
 
-			util_dynarray_foreach(&ctx.current_block, midgard_instruction, instr) {
-				printf("Instruction: %d\n", instr->i);
+			util_dynarray_foreach(&ctx.current_block, midgard_instruction, ins) {
+				switch(ins->type) {
+					case midgard_word_type_alu:
+						printf("ALU instruction\n");
+						break;
+					default:
+						printf("Unknown midgard instruction type\n");
+						break;
+				}
 			}
 
 			util_dynarray_fini(&ctx.current_block);
