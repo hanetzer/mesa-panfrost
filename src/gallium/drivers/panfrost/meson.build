@@ -3,6 +3,7 @@ midgard_compiler = executable(
   'midgard/midgard_cmdline.c',
   include_directories : [inc_src, inc_include, inc_gallium, inc_gallium_aux, include_directories('midgard')],
   dependencies : [
+    dep_thread,
     idep_nir
   ],
   link_with : [
