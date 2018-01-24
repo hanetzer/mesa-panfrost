@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2014 Rob Clark <robclark@freedesktop.org>
  * Copyright (C) 2018 Alyssa Rosenzweig <alyssa@rosenzweig.io>
+ * Copyright (C) 2014 Rob Clark <robclark@freedesktop.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -22,8 +22,8 @@
  * SOFTWARE.
  *
  * Authors:
- *    Rob Clark <robclark@freedesktop.org>
  *    Alyssa Rosenzweig <alyssa@rosenzweig.io>
+ *    Rob Clark <robclark@freedesktop.org>
  */
 
 #include <sys/types.h>
@@ -38,12 +38,11 @@
 #include "compiler/glsl/standalone.h"
 #include "compiler/glsl/glsl_to_nir.h"
 #include "compiler/nir_types.h"
+#include "main/imports.h"
 
 static int
 midgard_compile_shader_nir(nir_shader *nir)
 {
-	printf("TODO: Compile from nir :)\n");
-
 	nir_foreach_function(func, nir) {
 		printf("Function: %s\n", func->name);
 
@@ -83,70 +82,24 @@ static const nir_shader_compiler_options nir_options = {
 		.lower_extract_word = true,
 };
 
-static nir_shader *
-load_glsl(unsigned num_files, char* const* files, gl_shader_stage stage)
-{
-	static const struct standalone_options options = {
-			.glsl_version = 140,
-			.do_link = true,
-	};
-	struct gl_shader_program *prog;
-
-	prog = standalone_compile_shader(&options, num_files, files);
-	if (!prog)
-		errx(1, "couldn't parse `%s'", files[0]);
-
-	nir_shader *nir = glsl_to_nir(prog, stage, &nir_options);
-
-	return nir;
-}
-
-static void print_usage(void)
-{
-	printf("Usage: midgard_compiler [OPTIONS]... <(file.vert | file.frag)*>\n");
-}
-
 int main(int argc, char **argv)
 {
-	int ret = 0, n = 1;
-	char *filenames[2];
-	int num_files = 0;
-	unsigned stage = 0;
-
-	while (n < argc) {
-		char *filename = argv[n];
-		char *ext = rindex(filename, '.');
-
-		if (strcmp(ext, ".frag") == 0) {
-			if (num_files >= ARRAY_SIZE(filenames))
-				errx(1, "too many GLSL files");
-			stage = MESA_SHADER_FRAGMENT;
-		} else if (strcmp(ext, ".vert") == 0) {
-			if (num_files >= ARRAY_SIZE(filenames))
-				errx(1, "too many GLSL files");
-			stage = MESA_SHADER_VERTEX;
-		} else {
-			print_usage();
-			return -1;
-		}
-
-		filenames[num_files++] = filename;
-
-		n++;
-	}
-
+	struct gl_shader_program *prog;
 	nir_shader *nir;
 
-	if (num_files > 0) {
-		nir = load_glsl(num_files, filenames, stage);
-	} else {
-		print_usage();
-		return -1;
+	struct standalone_options options = {
+		.glsl_version = 140,
+		.do_link = true,
+	};
+
+	if (argc != 2) {
+		printf("Must pass exactly one GLSL file\n");
+		exit(1);
 	}
 
-	ret = midgard_compile_shader_nir(nir);
-	if (ret) {
-		fprintf(stderr, "compiler failed!\n");
-		return ret;
-	}
+	prog = standalone_compile_shader(&options, 1, &argv[1]);
+	prog->_LinkedShaders[MESA_SHADER_FRAGMENT]->Program->info.stage = MESA_SHADER_FRAGMENT;
+	nir = glsl_to_nir(prog, MESA_SHADER_FRAGMENT, &nir_options);
+
+	midgard_compile_shader_nir(nir);
 }
