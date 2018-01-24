@@ -190,6 +190,27 @@ midgard_compile_shader_nir(nir_shader *nir)
 			}
 
 			util_dynarray_foreach(&ctx.current_block, midgard_instruction, ins) {
+				unsigned lookahead_type;
+
+				/* Midgard prefetches instruction types, so during emission we need to lookahead too */
+
+				midgard_instruction *next = (ins + 1);
+
+				/* Ensure that next is valid */
+
+				if (next < (midgard_instruction *)((char *)ctx.current_block.data + ctx.current_block.size)) {
+					/* There is a next instruction; use its tag, unless this is the second to last before an ALU. TODO: Test this special case */
+					midgard_instruction *next2 = (next + 1);
+
+					if (next2 >= (midgard_instruction *)((char *)ctx.current_block.data + ctx.current_block.size) && next->type == midgard_word_type_alu) {
+						lookahead_type = 1;
+					} else {
+						lookahead_type = next->type;
+					}
+				} else {
+					/* Last instruction, so default to one */
+					lookahead_type = 1;
+				}
 				switch(ins->type) {
 					case midgard_word_type_alu:
 						printf("ALU instruction\n");
@@ -198,6 +219,8 @@ midgard_compile_shader_nir(nir_shader *nir)
 						printf("Unknown midgard instruction type\n");
 						break;
 				}
+
+				printf("Lookahead: %d\n", lookahead_type);
 			}
 
 			util_dynarray_fini(&ctx.current_block);
