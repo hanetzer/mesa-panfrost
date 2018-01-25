@@ -260,7 +260,12 @@ midgard_compile_shader_nir(nir_shader *nir)
 				emit_instr(&ctx, instr);
 			}
 
+			struct util_dynarray emission;
+			util_dynarray_init(&emission, NULL);
+
 			util_dynarray_foreach(&ctx.current_block, midgard_instruction, ins) {
+				uint8_t tag = ins->type | (get_lookahead_type(ctx.current_block, ins) << 4);
+
 				switch(ins->type) {
 					case TAG_ALU_4:
 					case TAG_ALU_8:
@@ -268,18 +273,43 @@ midgard_compile_shader_nir(nir_shader *nir)
 					case TAG_ALU_16:
 						printf("ALU instruction\n");
 						break;
-					case TAG_LOAD_STORE_4:
+					case TAG_LOAD_STORE_4: {
 						printf("Load store\n");
 						printf("Op: %d\n", ins->load_store.op);
+
+						/* Load store instructions have
+						 * two words at once. We only
+						 * have one queued up, so we
+						 * need to NOP pad. TODO: Make
+						 * less bad. */
+
+				 		midgard_load_store_word_t actual = ins->load_store;
+						midgard_load_store_word_t fake = m_ld_st_noop(0, 0).load_store;
+
+						midgard_load_store_t instruction = {
+							.tag = tag,
+							.word1 = *(uint64_t*) &actual,
+							.word2 = *(uint64_t*) &fake
+						};
+
+						util_dynarray_append(&emission, midgard_load_store_t, instruction);
+
+						break;
+				        }
 					default:
 						printf("Unknown midgard instruction type\n");
 						break;
 				}
-
-				printf("Lookahead: %d\n", get_lookahead_type(ctx.current_block, ins));
 			}
 
+			/* TODO: Propagate compiled code up correctly */
+			FILE *fp;
+			fp = fopen("out.bin", "wb");
+			fwrite(emission.data, 1, emission.size, fp);
+			fclose(fp);
+
 			util_dynarray_fini(&ctx.current_block);
+			util_dynarray_fini(&emission);
 		}
 	}
 
@@ -325,6 +355,6 @@ int main(int argc, char **argv)
 	nir = glsl_to_nir(prog, MESA_SHADER_FRAGMENT, &nir_options);
 	midgard_compile_shader_nir(nir);
 
-	nir = glsl_to_nir(prog, MESA_SHADER_VERTEX, &nir_options);
-	midgard_compile_shader_nir(nir);
+	//nir = glsl_to_nir(prog, MESA_SHADER_VERTEX, &nir_options);
+	//midgard_compile_shader_nir(nir);
 }

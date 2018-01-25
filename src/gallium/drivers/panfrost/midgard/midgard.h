@@ -191,6 +191,7 @@ __attribute__((__packed__))
 typedef struct
 __attribute__((__packed__))
 {
+	uint8_t  tag       : 8;
 	uint64_t word1     : 60;
 	uint64_t word2     : 60;
 } midgard_load_store_t;
