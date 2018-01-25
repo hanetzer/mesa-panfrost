@@ -59,13 +59,15 @@ typedef struct midgard_instruction {
  * driver seems to do it that way */
 
 #define M_LOAD_STORE(name) \
-	static midgard_instruction m_##name() { \
+	static midgard_instruction m_##name(unsigned reg, unsigned address) { \
 		midgard_instruction i = { \
 			.type = TAG_LOAD_STORE_4, \
 			.load_store = { \
 				.op = midgard_op_##name, \
 				.mask = 0xF, \
-				.swizzle = 0xFF \
+				.swizzle = 0xFF, \
+				.reg = reg, \
+				.address = address \
 			} \
 		}; \
 		\
@@ -131,23 +133,29 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 	}
 }
 
-static void
-get_src(nir_src src)
+static unsigned
+resolve_source_register(nir_src src)
 {
 	if (src.is_ssa) {
 		printf("SSA index: %d\n", src.ssa->index);
+		printf("--TODO: RESOLVE REGISTER!--\n");
+		return REGISTER_UNUSED;
 	} else {
 		printf("Reg offset: %d\n", src.reg.base_offset);
+		return 0;
 	}
 }
 
-static void
-get_dest(nir_dest src)
+static unsigned
+resolve_destination_register(nir_dest src)
 {
 	if (src.is_ssa) {
 		printf("SSA index: %d\n", src.ssa.index);
+		printf("--TODO: RESOLVE REGISTER!--\n");
+		return REGISTER_UNUSED;
 	} else {
 		printf("Reg offset: %d\n", src.reg.base_offset);
+		return 0;
 	}
 }
 
@@ -155,7 +163,7 @@ static void
 emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 {
         nir_const_value *const_offset;
-        unsigned offset;
+        unsigned offset, reg;
 
 	switch(instr->intrinsic) {
 		case nir_intrinsic_load_uniform:
@@ -166,10 +174,9 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			assert(offset % 4 == 0);
 			offset = offset / 4;
 
-			printf("Load uniform offset %d\n", offset);
-			get_dest(instr->dest);
+			reg = resolve_destination_register(instr->dest);
 
-			util_dynarray_append(&ctx->current_block, midgard_instruction, m_load_uniform_32());
+			util_dynarray_append(&ctx->current_block, midgard_instruction, m_load_uniform_32(reg, offset));
 
 			break;
 
@@ -180,10 +187,10 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			offset = nir_intrinsic_base(instr) + const_offset->u32[0];
 			offset = offset * 4 + nir_intrinsic_component(instr);
 
-			get_src(instr->src[0]);
+			reg = resolve_source_register(instr->src[0]);
 
 			printf("Store output to offset %d\n", offset);
-			util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32());
+			util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32(reg, offset));
 
 			break;
 
