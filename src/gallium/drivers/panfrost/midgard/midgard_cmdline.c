@@ -248,6 +248,9 @@ get_lookahead_type(struct util_dynarray block, midgard_instruction *ins)
 	return 1;
 }
 
+#define EMIT_AND_COUNT(type, val) util_dynarray_append(emission, type, val); \
+				  bytes_emitted += sizeof(type)
+
 static void
 emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct util_dynarray *emission)
 {
@@ -259,6 +262,7 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 		case TAG_ALU_12:
 		case TAG_ALU_16: {
 			uint32_t control = tag;
+			size_t bytes_emitted = 0;
 			
 			/* TODO: Determine which units need to be enabled */
 
@@ -272,12 +276,17 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					.output_reg = 0
 				};
 
-				util_dynarray_append(emission, uint32_t, control);
-				util_dynarray_append(emission, alu_register_word, word);
-				util_dynarray_append(emission, midgard_vector_alu_t, ins->vector_alu);
+				EMIT_AND_COUNT(uint32_t, control);
+				EMIT_AND_COUNT(alu_register_word, word);
+				EMIT_AND_COUNT(midgard_vector_alu_t, ins->vector_alu);
 			} else {
 				control |= ALU_ENAB_SCAL_ADD;
 			}
+
+			/* Pad ALU op to nearest word */
+
+			if (bytes_emitted & 3)
+				util_dynarray_grow(emission, 4 - (bytes_emitted & 3));
 
 			printf("ALU instruction\n");
 			break;
