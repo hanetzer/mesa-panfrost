@@ -284,11 +284,12 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 }
 
 static int
-midgard_compile_shader_nir(nir_shader *nir)
+midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 {
 	compiler_context ctx;
 
 	optimise_nir(nir);
+	nir_print_shader(nir, stdout);
 
 	nir_foreach_function(func, nir) {
 		if (!func->impl)
@@ -301,26 +302,33 @@ midgard_compile_shader_nir(nir_shader *nir)
 				emit_instr(&ctx, instr);
 			}
 
-			struct util_dynarray emission;
-			util_dynarray_init(&emission, NULL);
-
-			util_dynarray_foreach(&ctx.current_block, midgard_instruction, ins) {
-				emit_binary_instruction(&ctx, ins, &emission);
-			}
-
-			/* TODO: Propagate compiled code up correctly */
-			FILE *fp;
-			fp = fopen("out.bin", "wb");
-			fwrite(emission.data, 1, emission.size, fp);
-			fclose(fp);
-
-			util_dynarray_fini(&ctx.current_block);
-			util_dynarray_fini(&emission);
+			break; /* TODO: Multi-block shaders */
 		}
+
+		break; /* TODO: Multi-function shaders */
 	}
 
-	nir_print_shader(nir, stdout);
+	util_dynarray_init(compiled, NULL);
+
+	util_dynarray_foreach(&ctx.current_block, midgard_instruction, ins) {
+		emit_binary_instruction(&ctx, ins, compiled);
+	}
+
+	util_dynarray_fini(&ctx.current_block);
+
+	/* TODO: Propagate compiled code up correctly */
 	return 0;
+}
+
+static void
+finalise_to_disk(const char *filename, struct util_dynarray *data)
+{
+	FILE *fp;
+	fp = fopen(filename, "wb");
+	fwrite(data->data, 1, data->size, fp);
+	fclose(fp);
+
+	util_dynarray_fini(data);
 }
 
 static const nir_shader_compiler_options nir_options = {
@@ -358,9 +366,13 @@ int main(int argc, char **argv)
 	prog = standalone_compile_shader(&options, 2, &argv[1]);
 	prog->_LinkedShaders[MESA_SHADER_FRAGMENT]->Program->info.stage = MESA_SHADER_FRAGMENT;
 
-	nir = glsl_to_nir(prog, MESA_SHADER_FRAGMENT, &nir_options);
-	midgard_compile_shader_nir(nir);
+	struct util_dynarray compiled;
 
-	//nir = glsl_to_nir(prog, MESA_SHADER_VERTEX, &nir_options);
-	//midgard_compile_shader_nir(nir);
+	nir = glsl_to_nir(prog, MESA_SHADER_VERTEX, &nir_options);
+	midgard_compile_shader_nir(nir, &compiled);
+	finalise_to_disk("vertex.bin", &compiled);
+
+	nir = glsl_to_nir(prog, MESA_SHADER_FRAGMENT, &nir_options);
+	midgard_compile_shader_nir(nir, &compiled);
+	finalise_to_disk("fragment.bin", &compiled);
 }
