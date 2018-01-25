@@ -47,6 +47,7 @@
 
 typedef struct midgard_instruction {
 	midgard_word_type type; /* ALU, load/store, texture */
+	bool vector; /* If it's an ALU instruction */
 	union {
 		midgard_load_store_word_t load_store;
 		midgard_scalar_alu_t scalar_alu;
@@ -126,7 +127,12 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 			instr->value.f32[3]);
 
 		midgard_instruction ins = { .type = TAG_ALU_4 };
+		ins.vector = true;
 		ins.vector_alu.op = midgard_alu_op_fmov;
+		ins.vector_alu.reg_mode = midgard_reg_mode_full;
+		ins.vector_alu.dest_override = midgard_dest_override_none;
+		ins.vector_alu.outmod = midgard_outmod_none;
+		ins.vector_alu.mask = 0xFF;
 		util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 	} else {
 		printf("Unknown configuration in load_const %d x %d\n", def.num_components, def.bit_size);
@@ -251,9 +257,31 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 		case TAG_ALU_4:
 		case TAG_ALU_8:
 		case TAG_ALU_12:
-		case TAG_ALU_16:
+		case TAG_ALU_16: {
+			uint32_t control = tag;
+			
+			/* TODO: Determine which units need to be enabled */
+
+			if (ins->vector) {
+				control |= ALU_ENAB_VEC_ADD;
+
+				/* TODO */
+				alu_register_word word = {
+					.input1_reg = 0,
+					.input2_reg = 0,
+					.output_reg = 0
+				};
+
+				util_dynarray_append(emission, uint32_t, control);
+				util_dynarray_append(emission, alu_register_word, word);
+				util_dynarray_append(emission, midgard_vector_alu_t, ins->vector_alu);
+			} else {
+				control |= ALU_ENAB_SCAL_ADD;
+			}
+
 			printf("ALU instruction\n");
 			break;
+		 }
 
 		case TAG_LOAD_STORE_4: {
 			printf("Load store\n");
