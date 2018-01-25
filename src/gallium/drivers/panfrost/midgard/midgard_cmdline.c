@@ -242,6 +242,47 @@ get_lookahead_type(struct util_dynarray block, midgard_instruction *ins)
 	return 1;
 }
 
+static void
+emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct util_dynarray *emission)
+{
+	uint8_t tag = ins->type | (get_lookahead_type(ctx->current_block, ins) << 4);
+
+	switch(ins->type) {
+		case TAG_ALU_4:
+		case TAG_ALU_8:
+		case TAG_ALU_12:
+		case TAG_ALU_16:
+			printf("ALU instruction\n");
+			break;
+
+		case TAG_LOAD_STORE_4: {
+			printf("Load store\n");
+			printf("Op: %d\n", ins->load_store.op);
+
+			/* Load store instructions have two words at once. We
+			 * only have one queued up, so we need to NOP pad.
+			 * TODO: Make less bad. */
+
+			midgard_load_store_word_t actual = ins->load_store;
+			midgard_load_store_word_t fake = m_ld_st_noop(0, 0).load_store;
+
+			midgard_load_store_t instruction = {
+				.tag = tag,
+				.word1 = *(uint64_t*) &actual,
+				.word2 = *(uint64_t*) &fake
+			};
+
+			util_dynarray_append(emission, midgard_load_store_t, instruction);
+
+			break;
+		}
+
+		default:
+			printf("Unknown midgard instruction type\n");
+			break;
+	}
+}
+
 static int
 midgard_compile_shader_nir(nir_shader *nir)
 {
@@ -264,42 +305,7 @@ midgard_compile_shader_nir(nir_shader *nir)
 			util_dynarray_init(&emission, NULL);
 
 			util_dynarray_foreach(&ctx.current_block, midgard_instruction, ins) {
-				uint8_t tag = ins->type | (get_lookahead_type(ctx.current_block, ins) << 4);
-
-				switch(ins->type) {
-					case TAG_ALU_4:
-					case TAG_ALU_8:
-					case TAG_ALU_12:
-					case TAG_ALU_16:
-						printf("ALU instruction\n");
-						break;
-					case TAG_LOAD_STORE_4: {
-						printf("Load store\n");
-						printf("Op: %d\n", ins->load_store.op);
-
-						/* Load store instructions have
-						 * two words at once. We only
-						 * have one queued up, so we
-						 * need to NOP pad. TODO: Make
-						 * less bad. */
-
-				 		midgard_load_store_word_t actual = ins->load_store;
-						midgard_load_store_word_t fake = m_ld_st_noop(0, 0).load_store;
-
-						midgard_load_store_t instruction = {
-							.tag = tag,
-							.word1 = *(uint64_t*) &actual,
-							.word2 = *(uint64_t*) &fake
-						};
-
-						util_dynarray_append(&emission, midgard_load_store_t, instruction);
-
-						break;
-				        }
-					default:
-						printf("Unknown midgard instruction type\n");
-						break;
-				}
+				emit_binary_instruction(&ctx, ins, &emission);
 			}
 
 			/* TODO: Propagate compiled code up correctly */
