@@ -65,7 +65,7 @@ typedef struct midgard_instruction {
 			.load_store = { \
 				.op = midgard_op_##name, \
 				.mask = 0xF, \
-				.swizzle = 0xFF, \
+				.swizzle = SWIZZLE(COMPONENT_X, COMPONENT_Y, COMPONENT_Z, COMPONENT_W), \
 				.reg = reg, \
 				.address = address \
 			} \

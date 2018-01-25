@@ -215,3 +215,11 @@ __attribute__((__packed__))
 #define REGISTER_TEXTURE_1 28
 #define REGISTER_TEXTURE_2 29
 #define REGISTER_SELECT  31
+
+/* Swizzle support */
+
+#define SWIZZLE(A, B, C, D) ((D << 6) | (C << 4) | (B << 2) | (A << 0))
+#define COMPONENT_X 0x0
+#define COMPONENT_Y 0x1
+#define COMPONENT_Z 0x2
+#define COMPONENT_W 0x3
