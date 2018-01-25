@@ -72,7 +72,15 @@ typedef struct midgard_instruction {
 		return i; \
 	}
 
+M_LOAD_STORE(ld_st_noop);
+M_LOAD_STORE(load_attr_16);
+M_LOAD_STORE(load_attr_32);
+M_LOAD_STORE(load_vary_16);
+M_LOAD_STORE(load_vary_32);
+M_LOAD_STORE(load_uniform_16);
 M_LOAD_STORE(load_uniform_32);
+M_LOAD_STORE(store_vary_16);
+M_LOAD_STORE(store_vary_32);
 
 typedef struct compiler_context {
 	/* List of midgard_instructions emitted for the current block */
@@ -175,9 +183,7 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			get_src(instr->src[0]);
 
 			printf("Store output to offset %d\n", offset);
-
-			{midgard_instruction ins = { .type = TAG_LOAD_STORE_4 };
-			util_dynarray_append(&ctx->current_block, midgard_instruction, ins);}
+			util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32());
 
 			break;
 
