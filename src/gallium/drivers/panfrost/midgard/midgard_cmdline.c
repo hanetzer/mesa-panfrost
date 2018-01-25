@@ -285,8 +285,8 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 
 			/* Pad ALU op to nearest word */
 
-			if (bytes_emitted & 3)
-				util_dynarray_grow(emission, 4 - (bytes_emitted & 3));
+			if (bytes_emitted & 15)
+				util_dynarray_grow(emission, 16 - (bytes_emitted & 15));
 
 			printf("ALU instruction\n");
 			break;
