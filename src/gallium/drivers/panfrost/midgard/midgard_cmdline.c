@@ -254,6 +254,7 @@ get_lookahead_type(struct util_dynarray block, midgard_instruction *ins)
 static void
 emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct util_dynarray *emission)
 {
+	if (ins->type == TAG_ALU_4) ins->type = TAG_ALU_8;
 	uint8_t tag = ins->type | (get_lookahead_type(ctx->current_block, ins) << 4);
 
 	switch(ins->type) {
@@ -279,6 +280,7 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 				EMIT_AND_COUNT(uint32_t, control);
 				EMIT_AND_COUNT(alu_register_word, word);
 				EMIT_AND_COUNT(midgard_vector_alu_t, ins->vector_alu);
+
 			} else {
 				control |= ALU_ENAB_SCAL_ADD;
 			}
@@ -287,6 +289,14 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 
 			if (bytes_emitted & 15)
 				util_dynarray_grow(emission, 16 - (bytes_emitted & 15));
+
+			/* Tack on constants */
+
+			float constants[] = { 1.0, 0.0, 0.5, 0.3 };
+			EMIT_AND_COUNT(float, constants[0]);
+			EMIT_AND_COUNT(float, constants[1]);
+			EMIT_AND_COUNT(float, constants[2]);
+			EMIT_AND_COUNT(float, constants[3]);
 
 			printf("ALU instruction\n");
 			break;
