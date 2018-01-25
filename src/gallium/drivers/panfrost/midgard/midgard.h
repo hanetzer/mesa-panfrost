@@ -197,9 +197,20 @@ __attribute__((__packed__))
 
 /* Some defines not found in the disassembler */
 
+/* 4-bit type tags */
+
 #define TAG_TEXTURE_4 0x3
 #define TAG_LOAD_STORE_4 0x5
 #define TAG_ALU_4 0x8
 #define TAG_ALU_8 0x9
 #define TAG_ALU_12 0xA
 #define TAG_ALU_16 0xB
+
+/* Special register aliases */
+
+#define REGISTER_UNUSED 24
+#define REGISTER_INLINE 26
+#define REGISTER_OFFSET 27
+#define REGISTER_TEXTURE_1 28
+#define REGISTER_TEXTURE_2 29
+#define REGISTER_SELECT  31
