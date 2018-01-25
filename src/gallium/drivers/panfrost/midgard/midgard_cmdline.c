@@ -41,12 +41,38 @@
 
 #include "midgard.h"
 
+/* Generic in-memory data type repesenting an instruction.  Its format bridges
+ * the low-level binary representation with the higher level semantic meaning.
+ */
+
 typedef struct midgard_instruction {
 	midgard_word_type type; /* ALU, load/store, texture */
 	union {
 		midgard_load_store_word_t load_store;
+		midgard_scalar_alu_t scalar_alu;
+		midgard_vector_alu_t vector_alu;
+		/* TODO Texture */
 	};
 } midgard_instruction;
+
+/* Helpers to generate midgard_instruction's using macro magic, since every
+ * driver seems to do it that way */
+
+#define M_LOAD_STORE(name) \
+	static midgard_instruction m_##name() { \
+		midgard_instruction i = { \
+			.type = TAG_LOAD_STORE_4, \
+			.load_store = { \
+				.op = midgard_op_##name, \
+				.mask = 0xF, \
+				.swizzle = 0xFF \
+			} \
+		}; \
+		\
+		return i; \
+	}
+
+M_LOAD_STORE(load_uniform_32);
 
 typedef struct compiler_context {
 	/* List of midgard_instructions emitted for the current block */
@@ -90,6 +116,7 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 			instr->value.f32[3]);
 
 		midgard_instruction ins = { .type = TAG_ALU_4 };
+		ins.vector_alu.op = midgard_alu_op_fmov;
 		util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 	} else {
 		printf("Unknown configuration in load_const %d x %d\n", def.num_components, def.bit_size);
@@ -134,13 +161,7 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			printf("Load uniform offset %d\n", offset);
 			get_dest(instr->dest);
 
-			{midgard_instruction ins = { .type = TAG_LOAD_STORE_4 };
-			ins.load_store.op = midgard_op_load_uniform_32; /* or 16? */
-			ins.load_store.reg = 0; /* TODO */
-			ins.load_store.mask = 0xF; /* TODO */
-			ins.load_store.swizzle = 0xFF; /* TODO */
-			ins.load_store.address = 0; /* TODO */
-			util_dynarray_append(&ctx->current_block, midgard_instruction, ins);}
+			util_dynarray_append(&ctx->current_block, midgard_instruction, m_load_uniform_32());
 
 			break;
 
