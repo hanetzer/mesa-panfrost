@@ -82,6 +82,53 @@ typedef struct midgard_instruction {
 		return i; \
 	}
 
+const midgard_vector_alu_src_t blank_alu_src = {
+	.abs = 0,
+	.negate = 0,
+	.rep_low = 0,
+	.rep_high = 0,
+	.half = 0,
+	.swizzle = SWIZZLE(COMPONENT_X, COMPONENT_Y, COMPONENT_Z, COMPONENT_W)
+};
+
+static unsigned
+alu_src_to_unsigned(midgard_vector_alu_src_t src)
+{
+	unsigned u;
+	memcpy(&u, &src, sizeof(src));
+	return u;
+}
+
+static midgard_instruction
+m_alu_vector(midgard_alu_op_e op, unsigned reg1, unsigned reg2, unsigned reg3)
+{
+	midgard_instruction ins = {
+		.type = TAG_ALU_4,
+		.registers = {
+			.input1_reg = reg1,
+			.input2_reg = reg2,
+			.output_reg = reg3
+		},
+		.vector = true,
+		.vector_alu = {
+			.op = op,
+			.reg_mode = midgard_reg_mode_full,
+			.dest_override = midgard_dest_override_none,
+			.outmod = midgard_outmod_none,
+			.mask = 0xFF,
+			.src1 = alu_src_to_unsigned(blank_alu_src),
+			.src2 = alu_src_to_unsigned(blank_alu_src)
+		},
+	};
+
+	return ins;
+}
+
+#define M_ALU_VECTOR_1(name) \
+	static midgard_instruction m_##name(unsigned src, unsigned dest) { \
+		return m_alu_vector(midgard_alu_op_##name, src, REGISTER_UNUSED, dest); \
+	}
+
 M_LOAD_STORE(ld_st_noop);
 M_LOAD_STORE(load_attr_16);
 M_LOAD_STORE(load_attr_32);
@@ -91,6 +138,8 @@ M_LOAD_STORE(load_uniform_16);
 M_LOAD_STORE(load_uniform_32);
 M_LOAD_STORE(store_vary_16);
 M_LOAD_STORE(store_vary_32);
+
+M_ALU_VECTOR_1(fmov)
 
 typedef struct compiler_context {
 	/* List of midgard_instructions emitted for the current block */
@@ -154,8 +203,6 @@ resolve_destination_register(nir_dest src)
 	}
 }
 
-
-
 static void
 emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 {
@@ -169,40 +216,10 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 			instr->value.f32[2],
 			instr->value.f32[3]);
 
-		midgard_instruction ins = { .type = TAG_ALU_4 };
-		ins.vector = true;
+		midgard_instruction ins = m_fmov(REGISTER_CONSTANT, ssa_to_register(&def));
 
 		ins.has_constants = true;
 		memcpy(&ins.constants, &instr->value.f32, sizeof(instr->value.f32));
-
-		alu_register_word registers = {
-			.input1_reg = REGISTER_CONSTANT,
-			.input2_reg = REGISTER_UNUSED,
-			.output_reg = ssa_to_register(&def)
-		};
-
-		ins.registers = registers;
-
-		ins.vector_alu.op = midgard_alu_op_fmov;
-		ins.vector_alu.reg_mode = midgard_reg_mode_full;
-		ins.vector_alu.dest_override = midgard_dest_override_none;
-		ins.vector_alu.outmod = midgard_outmod_none;
-		ins.vector_alu.mask = 0xFF;
-
-		midgard_vector_alu_src_t src;
-
-		src.abs = 0;
-		src.negate = 0;
-		src.rep_low = 0;
-		src.rep_high = 0;
-		src.half = 0;
-		src.swizzle = SWIZZLE(COMPONENT_X, COMPONENT_Y, COMPONENT_Z, COMPONENT_W);
-
-		unsigned src1;
-		memcpy(&src1, &src, sizeof(src));
-
-		ins.vector_alu.src1 = src1;
-		ins.vector_alu.src2 = src1;
 
 		util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 	} else {
