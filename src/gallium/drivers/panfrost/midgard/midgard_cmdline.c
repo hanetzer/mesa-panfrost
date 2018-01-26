@@ -194,11 +194,9 @@ static unsigned
 resolve_source_register(nir_src src)
 {
 	if (src.is_ssa) {
-		printf("SSA index: %d\n", src.ssa->index);
 		printf("--TODO: RESOLVE REGISTER!--\n");
 		return ssa_to_register(src.ssa);
 	} else {
-		printf("Reg offset: %d\n", src.reg.base_offset);
 		return src.reg.base_offset;
 	}
 }
@@ -207,11 +205,9 @@ static unsigned
 resolve_destination_register(nir_dest src)
 {
 	if (src.is_ssa) {
-		printf("SSA index: %d\n", src.ssa.index);
 		printf("--TODO: RESOLVE REGISTER!--\n");
 		return ssa_to_register(&src.ssa);
 	} else {
-		printf("Reg offset: %d\n", src.reg.base_offset);
 		return src.reg.base_offset;
 	}
 }
@@ -277,13 +273,13 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 
 			reg = resolve_source_register(instr->src[0]);
 
-			printf("Store output to offset %d\n", offset);
 			util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32(reg, offset));
 
 			break;
 
 		default:
 			printf ("Unhandled intrinsic\n");
+			break;
 	}
 }
 
@@ -380,14 +376,10 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 				EMIT_AND_COUNT(float, ins->constants[3]);
 			}
 
-			printf("ALU instruction\n");
 			break;
 		 }
 
 		case TAG_LOAD_STORE_4: {
-			printf("Load store\n");
-			printf("Op: %d\n", ins->load_store.op);
-
 			/* Load store instructions have two words at once. We
 			 * only have one queued up, so we need to NOP pad.
 			 * TODO: Make less bad. */
