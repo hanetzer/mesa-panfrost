@@ -230,6 +230,8 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 	}
 }
 
+/* TODO: Respect src modifiers; Midgard can handle it anyway */
+
 static void
 emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 {
@@ -339,7 +341,7 @@ get_lookahead_type(struct util_dynarray block, midgard_instruction *ins)
 static void
 emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct util_dynarray *emission)
 {
-	if (ins->type == TAG_ALU_4) ins->type = TAG_ALU_8;
+	if (ins->type == TAG_ALU_4 && ins->has_constants) ins->type = TAG_ALU_8;
 	uint8_t tag = ins->type | (get_lookahead_type(ctx->current_block, ins) << 4);
 
 	switch(ins->type) {
