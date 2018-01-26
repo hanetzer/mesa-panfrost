@@ -120,6 +120,42 @@ optimise_nir(nir_shader *nir)
 	NIR_PASS_V(nir, nir_convert_from_ssa, false);
 }
 
+/* TODO: REGISTER ALLOCATION!!! */
+
+static unsigned
+ssa_to_register(nir_ssa_def *def)
+{
+	return 8 + def->index;
+}
+
+static unsigned
+resolve_source_register(nir_src src)
+{
+	if (src.is_ssa) {
+		printf("SSA index: %d\n", src.ssa->index);
+		printf("--TODO: RESOLVE REGISTER!--\n");
+		return ssa_to_register(src.ssa);
+	} else {
+		printf("Reg offset: %d\n", src.reg.base_offset);
+		return 0;
+	}
+}
+
+static unsigned
+resolve_destination_register(nir_dest src)
+{
+	if (src.is_ssa) {
+		printf("SSA index: %d\n", src.ssa.index);
+		printf("--TODO: RESOLVE REGISTER!--\n");
+		return ssa_to_register(&src.ssa);
+	} else {
+		printf("Reg offset: %d\n", src.reg.base_offset);
+		return 0;
+	}
+}
+
+
+
 static void
 emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 {
@@ -142,7 +178,7 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 		alu_register_word registers = {
 			.input1_reg = REGISTER_CONSTANT,
 			.input2_reg = REGISTER_UNUSED,
-			.output_reg = 0 /* TODO */
+			.output_reg = ssa_to_register(&def)
 		};
 
 		ins.registers = registers;
@@ -171,32 +207,6 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 		util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 	} else {
 		printf("Unknown configuration in load_const %d x %d\n", def.num_components, def.bit_size);
-	}
-}
-
-static unsigned
-resolve_source_register(nir_src src)
-{
-	if (src.is_ssa) {
-		printf("SSA index: %d\n", src.ssa->index);
-		printf("--TODO: RESOLVE REGISTER!--\n");
-		return REGISTER_UNUSED;
-	} else {
-		printf("Reg offset: %d\n", src.reg.base_offset);
-		return 0;
-	}
-}
-
-static unsigned
-resolve_destination_register(nir_dest src)
-{
-	if (src.is_ssa) {
-		printf("SSA index: %d\n", src.ssa.index);
-		printf("--TODO: RESOLVE REGISTER!--\n");
-		return REGISTER_UNUSED;
-	} else {
-		printf("Reg offset: %d\n", src.reg.base_offset);
-		return 0;
 	}
 }
 
