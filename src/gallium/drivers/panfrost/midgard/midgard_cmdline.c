@@ -224,10 +224,24 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 	if (def.num_components == 4 && def.bit_size == 32) {
 		midgard_instruction ins = m_fmov(REGISTER_CONSTANT, ssa_to_register(&def));
 		attach_constants(&ins, &instr->value.f32);
-
 		util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 	} else {
 		printf("Unknown configuration in load_const %d x %d\n", def.num_components, def.bit_size);
+	}
+}
+
+static void
+emit_alu(compiler_context *ctx, nir_alu_instr *instr)
+{
+	midgard_instruction ins;
+
+	switch(instr->op) {
+		case nir_op_fadd:
+			ins = m_fadd(resolve_source_register(instr->src[0].src), resolve_source_register(instr->src[1].src), resolve_destination_register(instr->dest.dest));
+			util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
+		default:
+			printf("Unhandled ALU op\n");
+			break;
 	}
 }
 
@@ -285,6 +299,11 @@ emit_instr(compiler_context *ctx, struct nir_instr *instr)
 		case nir_instr_type_intrinsic:
 			emit_intrinsic(ctx, nir_instr_as_intrinsic(instr));
 			break;
+
+		case nir_instr_type_alu:
+			emit_alu(ctx, nir_instr_as_alu(instr));
+			break;
+
 		default:
 			printf("Unhandled instruction type\n");
 			break;
