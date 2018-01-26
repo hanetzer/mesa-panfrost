@@ -188,17 +188,32 @@ glsl_type_size(const struct glsl_type *type)
 static void
 optimise_nir(nir_shader *nir)
 {
-	/* TODO: Proper optimisation loop */
+	bool progress;
 
-	NIR_PASS_V(nir, nir_lower_vars_to_ssa);
+	do {
+		progress = false;
 
-	/* Midgard does not support I/O->I/O copies; lower these */
-	NIR_PASS_V(nir, nir_lower_var_copies);
+		NIR_PASS(progress, nir, nir_lower_vars_to_ssa);
 
-	NIR_PASS_V(nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
-	NIR_PASS_V(nir, nir_copy_prop);
-	NIR_PASS_V(nir, nir_opt_dce);
-	NIR_PASS_V(nir, nir_opt_algebraic);
+		/* Midgard does not support I/O->I/O copies; lower these */
+		NIR_PASS(progress, nir, nir_lower_var_copies);
+
+		NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
+		NIR_PASS(progress, nir, nir_copy_prop);
+		NIR_PASS(progress, nir, nir_opt_remove_phis);
+		NIR_PASS(progress, nir, nir_opt_dce);
+		NIR_PASS(progress, nir, nir_opt_dead_cf);
+		NIR_PASS(progress, nir, nir_opt_cse);
+		NIR_PASS(progress, nir, nir_opt_peephole_select, 8);
+		NIR_PASS(progress, nir, nir_opt_algebraic);
+		NIR_PASS(progress, nir, nir_opt_constant_folding);
+		NIR_PASS(progress, nir, nir_opt_undef);
+		NIR_PASS(progress, nir, nir_opt_loop_unroll, 
+				nir_var_shader_in |
+				nir_var_shader_out |
+				nir_var_local);
+	} while(progress);
+
 	NIR_PASS_V(nir, nir_convert_from_ssa, false);
 }
 
