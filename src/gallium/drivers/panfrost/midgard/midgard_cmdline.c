@@ -47,7 +47,11 @@
 
 typedef struct midgard_instruction {
 	midgard_word_type type; /* ALU, load/store, texture */
-	bool vector; /* If it's an ALU instruction */
+
+	/* Special fields for an ALU instruction */
+	bool vector; 
+	alu_register_word registers;
+
 	union {
 		midgard_load_store_word_t load_store;
 		midgard_scalar_alu_t scalar_alu;
@@ -128,6 +132,15 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 
 		midgard_instruction ins = { .type = TAG_ALU_4 };
 		ins.vector = true;
+
+		alu_register_word registers = {
+			.input1_reg = 0,
+			.input2_reg = 0,
+			.output_reg = 0
+		};
+
+		ins.registers = registers;
+
 		ins.vector_alu.op = midgard_alu_op_fmov;
 		ins.vector_alu.reg_mode = midgard_reg_mode_full;
 		ins.vector_alu.dest_override = midgard_dest_override_none;
@@ -287,14 +300,8 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 				control |= ALU_ENAB_VEC_ADD;
 
 				/* TODO */
-				alu_register_word word = {
-					.input1_reg = 0,
-					.input2_reg = 0,
-					.output_reg = 0
-				};
-
 				EMIT_AND_COUNT(uint32_t, control);
-				EMIT_AND_COUNT(alu_register_word, word);
+				EMIT_AND_COUNT(alu_register_word, ins->registers);
 				EMIT_AND_COUNT(midgard_vector_alu_t, ins->vector_alu);
 
 			} else {
