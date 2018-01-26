@@ -283,6 +283,7 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 
 	switch(instr->intrinsic) {
 		case nir_intrinsic_load_uniform:
+		case nir_intrinsic_load_input:
 			const_offset = nir_src_as_const_value(instr->src[0]);
 			assert (const_offset && "no indirect inputs");
 
@@ -292,7 +293,10 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 
 			reg = resolve_destination_register(instr->dest);
 
-			util_dynarray_append(&ctx->current_block, midgard_instruction, m_load_uniform_32(reg, offset));
+			util_dynarray_append(&ctx->current_block, midgard_instruction, 
+				instr->intrinsic == nir_intrinsic_load_uniform ? 
+					m_load_uniform_32(reg, offset) :
+					m_load_vary_32(reg, offset));
 
 			break;
 
