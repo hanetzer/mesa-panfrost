@@ -162,6 +162,8 @@ M_LOAD_STORE(store_vary_32);
 M_ALU_VECTOR_1(fmov);
 M_ALU_VECTOR_2(fadd);
 M_ALU_VECTOR_2(fmul);
+M_ALU_VECTOR_2(fmin);
+M_ALU_VECTOR_2(fmax);
 
 static void
 attach_constants(midgard_instruction *ins, void *constants)
@@ -264,6 +266,8 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 	switch(instr->op) {
 		EMIT_ALU_CASE_2(fadd, fadd);
 		EMIT_ALU_CASE_2(fmul, fmul);
+		EMIT_ALU_CASE_2(fmin, fmin);
+		EMIT_ALU_CASE_2(fmax, fmax);
 
 		default:
 			printf("Unhandled ALU op\n");
