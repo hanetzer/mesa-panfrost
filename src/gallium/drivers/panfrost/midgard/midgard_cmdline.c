@@ -161,6 +161,7 @@ M_LOAD_STORE(store_vary_32);
 
 M_ALU_VECTOR_1(fmov);
 M_ALU_VECTOR_2(fadd);
+M_ALU_VECTOR_2(fmul);
 
 static void
 attach_constants(midgard_instruction *ins, void *constants)
@@ -244,12 +245,13 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 /* TODO: Respect src modifiers; Midgard can handle it anyway */
 
 #define EMIT_ALU_CASE_2(op_nir, op_midgard) \
-	case nir_op_fadd: \
-		ins = m_fadd(resolve_source_register(instr->src[0].src), \
-			     n2m_alu_modifiers(&instr->src[0]), \
-			     resolve_source_register(instr->src[1].src), \
-			     n2m_alu_modifiers(&instr->src[1]), \
-			     resolve_destination_register(instr->dest.dest)); \
+	case nir_op_##op_nir: \
+		ins = m_##op_midgard( \
+			resolve_source_register(instr->src[0].src), \
+			n2m_alu_modifiers(&instr->src[0]), \
+			resolve_source_register(instr->src[1].src), \
+			n2m_alu_modifiers(&instr->src[1]), \
+			resolve_destination_register(instr->dest.dest)); \
 		util_dynarray_append(&ctx->current_block, midgard_instruction, ins); \
 		break;
 
@@ -261,6 +263,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 
 	switch(instr->op) {
 		EMIT_ALU_CASE_2(fadd, fadd);
+		EMIT_ALU_CASE_2(fmul, fmul);
 
 		default:
 			printf("Unhandled ALU op\n");
