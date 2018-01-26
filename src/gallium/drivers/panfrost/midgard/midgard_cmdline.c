@@ -215,7 +215,7 @@ resolve_source_register(nir_src src)
 		printf("--TODO: RESOLVE REGISTER!--\n");
 		return ssa_to_register(src.ssa);
 	} else {
-		return src.reg.base_offset;
+		return src.reg.reg->index;
 	}
 }
 
@@ -226,7 +226,7 @@ resolve_destination_register(nir_dest src)
 		printf("--TODO: RESOLVE REGISTER!--\n");
 		return ssa_to_register(&src.ssa);
 	} else {
-		return src.reg.base_offset;
+		return src.reg.reg->index;
 	}
 }
 
