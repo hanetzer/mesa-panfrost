@@ -199,7 +199,7 @@ resolve_source_register(nir_src src)
 		return ssa_to_register(src.ssa);
 	} else {
 		printf("Reg offset: %d\n", src.reg.base_offset);
-		return 0;
+		return src.reg.base_offset;
 	}
 }
 
@@ -212,7 +212,7 @@ resolve_destination_register(nir_dest src)
 		return ssa_to_register(&src.ssa);
 	} else {
 		printf("Reg offset: %d\n", src.reg.base_offset);
-		return 0;
+		return src.reg.base_offset;
 	}
 }
 
