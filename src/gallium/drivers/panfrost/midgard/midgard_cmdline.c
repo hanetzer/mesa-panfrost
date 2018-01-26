@@ -144,8 +144,15 @@ M_LOAD_STORE(load_uniform_32);
 M_LOAD_STORE(store_vary_16);
 M_LOAD_STORE(store_vary_32);
 
-M_ALU_VECTOR_1(fmov)
-M_ALU_VECTOR_2(fadd)
+M_ALU_VECTOR_1(fmov);
+M_ALU_VECTOR_2(fadd);
+
+static void
+attach_constants(midgard_instruction *ins, void *constants)
+{
+	ins->has_constants = true;
+	memcpy(&ins->constants, constants, 16);
+}
 
 typedef struct compiler_context {
 	/* List of midgard_instructions emitted for the current block */
@@ -223,9 +230,7 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 			instr->value.f32[3]);
 
 		midgard_instruction ins = m_fmov(REGISTER_CONSTANT, ssa_to_register(&def));
-
-		ins.has_constants = true;
-		memcpy(&ins.constants, &instr->value.f32, sizeof(instr->value.f32));
+		attach_constants(&ins, &instr->value.f32);
 
 		util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 	} else {
