@@ -129,6 +129,11 @@ m_alu_vector(midgard_alu_op_e op, unsigned reg1, unsigned reg2, unsigned reg3)
 		return m_alu_vector(midgard_alu_op_##name, src, REGISTER_UNUSED, dest); \
 	}
 
+#define M_ALU_VECTOR_2(name) \
+	static midgard_instruction m_##name(unsigned src1, unsigned src2, unsigned dest) { \
+		return m_alu_vector(midgard_alu_op_##name, src1, src2, dest); \
+	}
+
 M_LOAD_STORE(ld_st_noop);
 M_LOAD_STORE(load_attr_16);
 M_LOAD_STORE(load_attr_32);
@@ -140,6 +145,7 @@ M_LOAD_STORE(store_vary_16);
 M_LOAD_STORE(store_vary_32);
 
 M_ALU_VECTOR_1(fmov)
+M_ALU_VECTOR_2(fadd)
 
 typedef struct compiler_context {
 	/* List of midgard_instructions emitted for the current block */
