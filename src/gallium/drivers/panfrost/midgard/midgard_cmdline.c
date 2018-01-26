@@ -91,6 +91,21 @@ const midgard_vector_alu_src_t blank_alu_src = {
 	.swizzle = SWIZZLE(COMPONENT_X, COMPONENT_Y, COMPONENT_Z, COMPONENT_W)
 };
 
+static midgard_vector_alu_src_t
+n2m_alu_modifiers(nir_alu_src *src)
+{
+	midgard_vector_alu_src_t alu_src = {
+		.abs = src->abs,
+		.negate = src->negate,
+		.rep_low = 0,
+		.rep_high = 0,
+		.half = 0,
+		.swizzle = SWIZZLE_FROM_ARRAY(src->swizzle)
+	};
+
+	return alu_src;
+}
+
 static unsigned
 alu_src_to_unsigned(midgard_vector_alu_src_t src)
 {
@@ -100,7 +115,7 @@ alu_src_to_unsigned(midgard_vector_alu_src_t src)
 }
 
 static midgard_instruction
-m_alu_vector(midgard_alu_op_e op, unsigned reg1, unsigned reg2, unsigned reg3)
+m_alu_vector(midgard_alu_op_e op, unsigned reg1, midgard_vector_alu_src_t mod1, unsigned reg2, midgard_vector_alu_src_t mod2, unsigned reg3)
 {
 	midgard_instruction ins = {
 		.type = TAG_ALU_4,
@@ -116,8 +131,8 @@ m_alu_vector(midgard_alu_op_e op, unsigned reg1, unsigned reg2, unsigned reg3)
 			.dest_override = midgard_dest_override_none,
 			.outmod = midgard_outmod_none,
 			.mask = 0xFF,
-			.src1 = alu_src_to_unsigned(blank_alu_src),
-			.src2 = alu_src_to_unsigned(blank_alu_src)
+			.src1 = alu_src_to_unsigned(mod1),
+			.src2 = alu_src_to_unsigned(mod2)
 		},
 	};
 
@@ -125,13 +140,13 @@ m_alu_vector(midgard_alu_op_e op, unsigned reg1, unsigned reg2, unsigned reg3)
 }
 
 #define M_ALU_VECTOR_1(name) \
-	static midgard_instruction m_##name(unsigned src, unsigned dest) { \
-		return m_alu_vector(midgard_alu_op_##name, src, REGISTER_UNUSED, dest); \
+	static midgard_instruction m_##name(unsigned src, midgard_vector_alu_src_t mod1, unsigned dest) { \
+		return m_alu_vector(midgard_alu_op_##name, src, mod1, REGISTER_UNUSED, blank_alu_src, dest); \
 	}
 
 #define M_ALU_VECTOR_2(name) \
-	static midgard_instruction m_##name(unsigned src1, unsigned src2, unsigned dest) { \
-		return m_alu_vector(midgard_alu_op_##name, src1, src2, dest); \
+	static midgard_instruction m_##name(unsigned src1, midgard_vector_alu_src_t mod1, unsigned src2, midgard_vector_alu_src_t mod2, unsigned dest) { \
+		return m_alu_vector(midgard_alu_op_##name, src1, mod1, src2, mod2, dest); \
 	}
 
 M_LOAD_STORE(ld_st_noop);
@@ -218,7 +233,7 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 	nir_ssa_def def = instr->def;
 
 	if (def.num_components == 4 && def.bit_size == 32) {
-		midgard_instruction ins = m_fmov(REGISTER_CONSTANT, ssa_to_register(&def));
+		midgard_instruction ins = m_fmov(REGISTER_CONSTANT, blank_alu_src, ssa_to_register(&def));
 		attach_constants(&ins, &instr->value.f32);
 		util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 	} else {
@@ -235,7 +250,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 
 	switch(instr->op) {
 		case nir_op_fadd:
-			ins = m_fadd(resolve_source_register(instr->src[0].src), resolve_source_register(instr->src[1].src), resolve_destination_register(instr->dest.dest));
+			ins = m_fadd(resolve_source_register(instr->src[0].src), n2m_alu_modifiers(&instr->src[0]), resolve_source_register(instr->src[1].src), n2m_alu_modifiers(&instr->src[1]), resolve_destination_register(instr->dest.dest));
 			util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 		default:
 			printf("Unhandled ALU op\n");
