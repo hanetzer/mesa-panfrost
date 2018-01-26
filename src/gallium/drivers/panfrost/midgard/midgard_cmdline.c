@@ -222,13 +222,6 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 	nir_ssa_def def = instr->def;
 
 	if (def.num_components == 4 && def.bit_size == 32) {
-		printf("Vector ALU with inline constant\n");
-		printf("<%f, %f, %f, %f>\n",
-			instr->value.f32[0],
-			instr->value.f32[1],
-			instr->value.f32[2],
-			instr->value.f32[3]);
-
 		midgard_instruction ins = m_fmov(REGISTER_CONSTANT, ssa_to_register(&def));
 		attach_constants(&ins, &instr->value.f32);
 
