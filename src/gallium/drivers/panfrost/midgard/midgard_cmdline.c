@@ -52,6 +52,9 @@ typedef struct midgard_instruction {
 	bool vector; 
 	alu_register_word registers;
 
+	bool has_constants;
+	float constants[4];
+
 	union {
 		midgard_load_store_word_t load_store;
 		midgard_scalar_alu_t scalar_alu;
@@ -132,6 +135,9 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 
 		midgard_instruction ins = { .type = TAG_ALU_4 };
 		ins.vector = true;
+
+		ins.has_constants = true;
+		memcpy(&ins.constants, &instr->value.f32, sizeof(instr->value.f32));
 
 		alu_register_word registers = {
 			.input1_reg = 0,
@@ -315,11 +321,12 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 
 			/* Tack on constants */
 
-			float constants[] = { 1.0, 0.0, 0.5, 0.3 };
-			EMIT_AND_COUNT(float, constants[0]);
-			EMIT_AND_COUNT(float, constants[1]);
-			EMIT_AND_COUNT(float, constants[2]);
-			EMIT_AND_COUNT(float, constants[3]);
+			if (ins->has_constants) {
+				EMIT_AND_COUNT(float, ins->constants[0]);
+				EMIT_AND_COUNT(float, ins->constants[1]);
+				EMIT_AND_COUNT(float, ins->constants[2]);
+				EMIT_AND_COUNT(float, ins->constants[3]);
+			}
 
 			printf("ALU instruction\n");
 			break;
