@@ -173,8 +173,9 @@ attach_constants(midgard_instruction *ins, void *constants)
 }
 
 typedef struct compiler_context {
-	/* List of midgard_instructions emitted for the current block */
+	gl_shader_stage stage;
 
+	/* List of midgard_instructions emitted for the current block */
 	struct util_dynarray current_block;
 } compiler_context;
 
@@ -296,7 +297,9 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			util_dynarray_append(&ctx->current_block, midgard_instruction, 
 				instr->intrinsic == nir_intrinsic_load_uniform ? 
 					m_load_uniform_32(reg, offset) :
-					m_load_vary_32(reg, offset));
+				ctx->stage == MESA_SHADER_FRAGMENT ?
+					m_load_vary_32(reg, offset) :
+					m_load_attr_32(reg, offset));
 
 			break;
 
@@ -443,7 +446,9 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 static int
 midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 {
-	compiler_context ctx;
+	compiler_context ctx = {
+		.stage = nir->info.stage
+	};
 
 	optimise_nir(nir);
 	nir_print_shader(nir, stdout);
