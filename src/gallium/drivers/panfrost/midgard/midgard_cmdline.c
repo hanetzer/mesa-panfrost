@@ -198,6 +198,7 @@ optimise_nir(nir_shader *nir)
 	NIR_PASS_V(nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
 	NIR_PASS_V(nir, nir_copy_prop);
 	NIR_PASS_V(nir, nir_opt_dce);
+	NIR_PASS_V(nir, nir_opt_algebraic);
 	NIR_PASS_V(nir, nir_convert_from_ssa, false);
 }
 
