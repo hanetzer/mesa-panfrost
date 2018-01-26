@@ -232,7 +232,7 @@ __attribute__((__packed__))
 /* Special register aliases */
 
 #define REGISTER_UNUSED 24
-#define REGISTER_INLINE 26
+#define REGISTER_CONSTANT 26
 #define REGISTER_OFFSET 27
 #define REGISTER_TEXTURE_1 28
 #define REGISTER_TEXTURE_2 29

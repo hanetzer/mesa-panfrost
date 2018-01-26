@@ -140,9 +140,9 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 		memcpy(&ins.constants, &instr->value.f32, sizeof(instr->value.f32));
 
 		alu_register_word registers = {
-			.input1_reg = 0,
-			.input2_reg = 0,
-			.output_reg = 0
+			.input1_reg = REGISTER_CONSTANT,
+			.input2_reg = REGISTER_UNUSED,
+			.output_reg = 0 /* TODO */
 		};
 
 		ins.registers = registers;
