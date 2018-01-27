@@ -159,11 +159,41 @@ M_LOAD_STORE(load_uniform_32);
 M_LOAD_STORE(store_vary_16);
 M_LOAD_STORE(store_vary_32);
 
-M_ALU_VECTOR_1(fmov);
 M_ALU_VECTOR_2(fadd);
 M_ALU_VECTOR_2(fmul);
 M_ALU_VECTOR_2(fmin);
 M_ALU_VECTOR_2(fmax);
+M_ALU_VECTOR_2(fmov);
+M_ALU_VECTOR_1(ffloor);
+M_ALU_VECTOR_1(fceil);
+M_ALU_VECTOR_2(fdot3);
+M_ALU_VECTOR_2(fdot3r);
+M_ALU_VECTOR_2(fdot4);
+M_ALU_VECTOR_2(freduce);
+M_ALU_VECTOR_2(iadd);
+M_ALU_VECTOR_2(isub);
+M_ALU_VECTOR_2(imul);
+M_ALU_VECTOR_2(imov);
+M_ALU_VECTOR_2(feq);
+M_ALU_VECTOR_2(fne);
+M_ALU_VECTOR_2(flt);
+M_ALU_VECTOR_2(fle);
+M_ALU_VECTOR_1(f2i);
+M_ALU_VECTOR_2(ieq);
+M_ALU_VECTOR_2(ine);
+M_ALU_VECTOR_2(ilt);
+M_ALU_VECTOR_2(ile);
+M_ALU_VECTOR_2(csel);
+M_ALU_VECTOR_1(i2f);
+M_ALU_VECTOR_2(fatan_pt2);
+M_ALU_VECTOR_1(frcp);
+M_ALU_VECTOR_1(frsqrt);
+M_ALU_VECTOR_1(fsqrt);
+M_ALU_VECTOR_1(fexp2);
+M_ALU_VECTOR_1(flog2);
+M_ALU_VECTOR_1(fsin);
+M_ALU_VECTOR_1(fcos);
+M_ALU_VECTOR_2(fatan_pt1);
 
 static void
 attach_constants(midgard_instruction *ins, void *constants)
