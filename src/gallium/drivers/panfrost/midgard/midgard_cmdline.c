@@ -163,7 +163,7 @@ M_ALU_VECTOR_2(fadd);
 M_ALU_VECTOR_2(fmul);
 M_ALU_VECTOR_2(fmin);
 M_ALU_VECTOR_2(fmax);
-M_ALU_VECTOR_2(fmov);
+M_ALU_VECTOR_1(fmov);
 M_ALU_VECTOR_1(ffloor);
 M_ALU_VECTOR_1(fceil);
 M_ALU_VECTOR_2(fdot3);
@@ -291,7 +291,14 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 	}
 }
 
-/* TODO: Respect src modifiers; Midgard can handle it anyway */
+#define EMIT_ALU_CASE_1(op_nir, op_midgard) \
+	case nir_op_##op_nir: \
+		ins = m_##op_midgard( \
+			resolve_source_register(instr->src[0].src), \
+			n2m_alu_modifiers(&instr->src[0]), \
+			resolve_destination_register(instr->dest.dest)); \
+		util_dynarray_append(&ctx->current_block, midgard_instruction, ins); \
+		break;
 
 #define EMIT_ALU_CASE_2(op_nir, op_midgard) \
 	case nir_op_##op_nir: \
@@ -315,6 +322,37 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		EMIT_ALU_CASE_2(fmul, fmul);
 		EMIT_ALU_CASE_2(fmin, fmin);
 		EMIT_ALU_CASE_2(fmax, fmax);
+		EMIT_ALU_CASE_1(fmov, fmov);
+		EMIT_ALU_CASE_1(ffloor, ffloor);
+		EMIT_ALU_CASE_1(fceil, fceil);
+		//EMIT_ALU_CASE_2(fdot3);
+		//EMIT_ALU_CASE_2(fdot3r);
+		//EMIT_ALU_CASE_2(fdot4);
+		//EMIT_ALU_CASE_2(freduce);
+		EMIT_ALU_CASE_2(iadd, iadd);
+		EMIT_ALU_CASE_2(isub, isub);
+		EMIT_ALU_CASE_2(imul, imul);
+		EMIT_ALU_CASE_2(imov, imov);
+		EMIT_ALU_CASE_2(feq, feq);
+		EMIT_ALU_CASE_2(fne, fne);
+		EMIT_ALU_CASE_2(flt, flt);
+		//EMIT_ALU_CASE_2(fle);
+		//EMIT_ALU_CASE_1(f2i);
+		EMIT_ALU_CASE_2(ieq, ieq);
+		EMIT_ALU_CASE_2(ine, ine);
+		EMIT_ALU_CASE_2(ilt, ilt);
+		//EMIT_ALU_CASE_2(ile);
+		//EMIT_ALU_CASE_2(csel, csel);
+		//EMIT_ALU_CASE_1(i2f);
+		//EMIT_ALU_CASE_2(fatan_pt2);
+		EMIT_ALU_CASE_1(frcp, frcp);
+		EMIT_ALU_CASE_1(frsq, frsqrt);
+		EMIT_ALU_CASE_1(fsqrt, fsqrt);
+		EMIT_ALU_CASE_1(fexp2, fexp2);
+		EMIT_ALU_CASE_1(flog2, flog2);
+		EMIT_ALU_CASE_1(fsin, fsin);
+		EMIT_ALU_CASE_1(fcos, fcos);
+		//EMIT_ALU_CASE_2(fatan_pt1);
 
 		default:
 			printf("Unhandled ALU op\n");

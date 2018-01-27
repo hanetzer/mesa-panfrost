@@ -79,7 +79,7 @@ typedef enum
 	midgard_alu_op_flog2      = 0xF5,
 	midgard_alu_op_fsin       = 0xF6,
 	midgard_alu_op_fcos       = 0xF7,
-	midgard_alu_op_fatan2_pt1 = 0xF9,
+	midgard_alu_op_fatan_pt1  = 0xF9,
 } midgard_alu_op_e;
 
 typedef enum
