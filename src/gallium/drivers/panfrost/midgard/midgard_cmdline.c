@@ -166,10 +166,10 @@ M_ALU_VECTOR_2(fmax);
 M_ALU_VECTOR_1(fmov);
 M_ALU_VECTOR_1(ffloor);
 M_ALU_VECTOR_1(fceil);
-M_ALU_VECTOR_2(fdot3);
-M_ALU_VECTOR_2(fdot3r);
-M_ALU_VECTOR_2(fdot4);
-M_ALU_VECTOR_2(freduce);
+//M_ALU_VECTOR_2(fdot3);
+//M_ALU_VECTOR_2(fdot3r);
+//M_ALU_VECTOR_2(fdot4);
+//M_ALU_VECTOR_2(freduce);
 M_ALU_VECTOR_2(iadd);
 M_ALU_VECTOR_2(isub);
 M_ALU_VECTOR_2(imul);
@@ -177,15 +177,15 @@ M_ALU_VECTOR_2(imov);
 M_ALU_VECTOR_2(feq);
 M_ALU_VECTOR_2(fne);
 M_ALU_VECTOR_2(flt);
-M_ALU_VECTOR_2(fle);
+//M_ALU_VECTOR_2(fle);
 M_ALU_VECTOR_1(f2i);
 M_ALU_VECTOR_2(ieq);
 M_ALU_VECTOR_2(ine);
 M_ALU_VECTOR_2(ilt);
-M_ALU_VECTOR_2(ile);
-M_ALU_VECTOR_2(csel);
+//M_ALU_VECTOR_2(ile);
+//M_ALU_VECTOR_2(csel);
 M_ALU_VECTOR_1(i2f);
-M_ALU_VECTOR_2(fatan_pt2);
+//M_ALU_VECTOR_2(fatan_pt2);
 M_ALU_VECTOR_1(frcp);
 M_ALU_VECTOR_1(frsqrt);
 M_ALU_VECTOR_1(fsqrt);
@@ -193,7 +193,7 @@ M_ALU_VECTOR_1(fexp2);
 M_ALU_VECTOR_1(flog2);
 M_ALU_VECTOR_1(fsin);
 M_ALU_VECTOR_1(fcos);
-M_ALU_VECTOR_2(fatan_pt1);
+//M_ALU_VECTOR_2(fatan_pt1);
 
 static void
 attach_constants(midgard_instruction *ins, void *constants)
@@ -317,6 +317,12 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 {
 	midgard_instruction ins;
 
+	/* Most Midgard ALU ops have a 1:1 correspondance to NIR ops; these are
+	 * supported. A few do not and are therefore commented and TODO to
+	 * figure out what code paths would generate these. Also, there are a
+	 * number of NIR ops which Midgard does not support and need to be
+	 * lowered, also TODO */
+
 	switch(instr->op) {
 		EMIT_ALU_CASE_2(fadd, fadd);
 		EMIT_ALU_CASE_2(fmul, fmul);
@@ -337,13 +343,15 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		EMIT_ALU_CASE_2(fne, fne);
 		EMIT_ALU_CASE_2(flt, flt);
 		//EMIT_ALU_CASE_2(fle);
-		//EMIT_ALU_CASE_1(f2i);
+		EMIT_ALU_CASE_1(f2i32, f2i);
+		EMIT_ALU_CASE_1(f2u32, f2i);
 		EMIT_ALU_CASE_2(ieq, ieq);
 		EMIT_ALU_CASE_2(ine, ine);
 		EMIT_ALU_CASE_2(ilt, ilt);
 		//EMIT_ALU_CASE_2(ile);
 		//EMIT_ALU_CASE_2(csel, csel);
-		//EMIT_ALU_CASE_1(i2f);
+		EMIT_ALU_CASE_1(i2f32, i2f);
+		EMIT_ALU_CASE_1(u2f32, i2f);
 		//EMIT_ALU_CASE_2(fatan_pt2);
 		EMIT_ALU_CASE_1(frcp, frcp);
 		EMIT_ALU_CASE_1(frsq, frsqrt);
