@@ -359,11 +359,15 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		EMIT_ALU_CASE_1(fexp2, fexp2);
 		EMIT_ALU_CASE_1(flog2, flog2);
 
-		// TODO: Input needs to be divided by pi, but doing that
-		// efficiently might require a custom NIR instruction +
-		// lowering pass?
-		//EMIT_ALU_CASE_1(fsin, fsin); 
-		//EMIT_ALU_CASE_1(fcos, fcos);
+		// Input needs to be divided by pi due to Midgard weirdness We
+		// define special NIR ops, fsinpi and fcospi, that include the
+		// division correctly, supplying appropriately lowering passes.
+		// That way, the division by pi can take advantage of constant
+		// folding, algebraic simplifications, and so forth.
+
+		EMIT_ALU_CASE_1(fsinpi, fsin);
+		EMIT_ALU_CASE_1(fcospi, fcos);
+
 		//EMIT_ALU_CASE_2(fatan_pt1);
 
 		default:
@@ -599,6 +603,7 @@ static const nir_shader_compiler_options nir_options = {
 		.lower_fmod32 = true,
 		.lower_fmod64 = true,
 		.lower_fdiv = true,
+		.lower_fsinpi = true,
 		.fuse_ffma = true,
 		.native_integers = true,
 		.vertex_id_zero_based = true,
