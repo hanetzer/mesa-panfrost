@@ -358,8 +358,12 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		EMIT_ALU_CASE_1(fsqrt, fsqrt);
 		EMIT_ALU_CASE_1(fexp2, fexp2);
 		EMIT_ALU_CASE_1(flog2, flog2);
-		EMIT_ALU_CASE_1(fsin, fsin);
-		EMIT_ALU_CASE_1(fcos, fcos);
+
+		// TODO: Input needs to be divided by pi, but doing that
+		// efficiently might require a custom NIR instruction +
+		// lowering pass?
+		//EMIT_ALU_CASE_1(fsin, fsin); 
+		//EMIT_ALU_CASE_1(fcos, fcos);
 		//EMIT_ALU_CASE_2(fatan_pt1);
 
 		default:
