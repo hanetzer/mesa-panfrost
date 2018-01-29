@@ -152,14 +152,19 @@ m_alu_vector(midgard_alu_op_e op, unsigned reg1, midgard_vector_alu_src_t mod1, 
 		return m_alu_vector(midgard_alu_op_##name, src1, mod1, src2, mod2, dest); \
 	}
 
+/* load/store instructions have both 32-bit and 16-bit variants, depending on
+ * whether we are using vectors composed of highp or mediump. At the moment, we
+ * don't support half-floats -- this requires changes in other parts of the
+ * compiler -- therefore the 16-bit versions are commented out. */
+
 M_LOAD_STORE(ld_st_noop);
-M_LOAD_STORE(load_attr_16);
+//M_LOAD_STORE(load_attr_16);
 M_LOAD_STORE(load_attr_32);
-M_LOAD_STORE(load_vary_16);
+//M_LOAD_STORE(load_vary_16);
 M_LOAD_STORE(load_vary_32);
-M_LOAD_STORE(load_uniform_16);
+//M_LOAD_STORE(load_uniform_16);
 M_LOAD_STORE(load_uniform_32);
-M_LOAD_STORE(store_vary_16);
+//M_LOAD_STORE(store_vary_16);
 M_LOAD_STORE(store_vary_32);
 
 M_ALU_VECTOR_2(fadd);
