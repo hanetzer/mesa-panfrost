@@ -202,7 +202,7 @@ static void
 attach_constants(midgard_instruction *ins, void *constants)
 {
 	ins->has_constants = true;
-	memcpy(&ins->constants, constants, 16);
+	memcpy(&ins->constants, constants, 16); /* TODO: How big? */
 }
 
 typedef struct compiler_context {
@@ -285,13 +285,9 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 {
 	nir_ssa_def def = instr->def;
 
-	if (def.num_components == 4 && def.bit_size == 32) {
-		midgard_instruction ins = m_fmov(REGISTER_CONSTANT, blank_alu_src, ssa_to_register(&def));
-		attach_constants(&ins, &instr->value.f32);
-		util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
-	} else {
-		printf("Unknown configuration in load_const %d x %d\n", def.num_components, def.bit_size);
-	}
+	midgard_instruction ins = m_fmov(REGISTER_CONSTANT, blank_alu_src, ssa_to_register(&def));
+	attach_constants(&ins, &instr->value.f32);
+	util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 }
 
 #define EMIT_ALU_CASE_1(op_nir, op_midgard) \
