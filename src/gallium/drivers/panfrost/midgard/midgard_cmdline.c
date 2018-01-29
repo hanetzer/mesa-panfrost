@@ -41,7 +41,10 @@
 
 #include "midgard.h"
 
-/* Generic in-memory data type repesenting an instruction.  Its format bridges
+/* Generic in-memory data type repesenting a single logical instruction, rather
+ * than a single instruction group. This is the preferred form for code gen.
+ * Multiple midgard_insturctions will later be combined during scheduling,
+ * though this is not represented in this structure.  Its format bridges
  * the low-level binary representation with the higher level semantic meaning.
  */
 
