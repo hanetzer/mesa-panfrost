@@ -530,10 +530,15 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 			midgard_load_store_word_t actual = ins->load_store;
 			midgard_load_store_word_t fake = m_ld_st_noop(0, 0).load_store;
 
+			uint64_t actual64, fake64;
+
+			memcpy(&actual64, &actual, sizeof(actual));
+			memcpy(&fake64, &fake, sizeof(fake));
+
 			midgard_load_store_t instruction = {
 				.tag = tag,
-				.word1 = *(uint64_t*) &actual,
-				.word2 = *(uint64_t*) &fake
+				.word1 = actual64,
+				.word2 = fake64
 			};
 
 			util_dynarray_append(emission, midgard_load_store_t, instruction);
