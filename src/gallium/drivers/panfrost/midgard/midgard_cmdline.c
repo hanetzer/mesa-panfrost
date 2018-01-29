@@ -552,6 +552,69 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 	}
 }
 
+/* While NIR handles this most of the time, sometimes we generate unnecessary
+ * mov instructions ourselves, in particular from the load_const routine if
+ * constants are inlined. As a peephole optimisation, eliminate redundant moves
+ * in the current block here.
+ */
+
+static void
+eliminate_constant_mov(compiler_context *ctx)
+{
+	util_dynarray_foreach(&ctx->current_block, midgard_instruction, move) {
+		/* Only interest ourselves with fmov instructions */
+		
+		if (move->type != TAG_ALU_4) return;
+		if (move->vector && move->vector_alu.op != midgard_alu_op_fmov) return;
+		if (!move->vector && move->scalar_alu.op != midgard_alu_op_fmov) return;
+
+		unsigned target_reg = move->registers.output_reg;
+		printf("Target reg: %d\n", target_reg);
+
+		/* Scan the succeeding instructions for usage */
+
+		bool used = false;
+
+		/* If the register has been overwritten, the search stops, so
+		 * keep track of live status */
+		
+		bool live = true;
+
+		for (midgard_instruction *candidate = (move + 1); IN_ARRAY(candidate, ctx->current_block) && live && !used; candidate += 1) {
+			/* Check this candidate for usage */
+
+			switch (candidate->type) {
+				case TAG_ALU_4: {
+					alu_register_word registers = candidate->registers;
+					break;
+				}
+
+				case TAG_LOAD_STORE_4: {
+					midgard_load_store_word_t word = candidate->load_store;
+
+					/* Only check if this register is relevant */
+
+					if (word.reg != target_reg) break;
+
+					/* Loads invalidate the original move */
+
+					if (!OP_IS_STORE(word.op)) {
+						live = false;
+						break;
+					}
+
+					/* At this point, we know that we are using this register! */
+					used = true;
+					break;
+			       }
+
+			}
+		}
+
+		printf("Move: %s\n", used ? "used" : "unused");
+	}
+}
+
 static int
 midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 {
@@ -572,6 +635,9 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 			nir_foreach_instr(instr, block) {
 				emit_instr(&ctx, instr);
 			}
+
+			/* Artefact of load_const in the average case */
+			eliminate_constant_mov(&ctx);
 
 			break; /* TODO: Multi-block shaders */
 		}

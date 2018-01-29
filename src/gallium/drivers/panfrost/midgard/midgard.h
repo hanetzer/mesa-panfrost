@@ -186,6 +186,11 @@ __attribute__((__packed__))
  * Load/store words
  */
 
+#define OP_IS_STORE(op) (\
+		op == midgard_op_store_vary_16 || \
+		op == midgard_op_store_vary_32 \
+	)
+
 typedef enum
 {
 	midgard_op_ld_st_noop   = 0x03,
