@@ -58,6 +58,12 @@ typedef struct midgard_instruction {
 	bool has_constants;
 	float constants[4];
 
+	/* dynarray's are O(n) to delete from, which makes peephole
+	 * optimisations a little awkward. Instead, just have an unused flag
+	 * which the code gen will skip over */
+
+	bool unused;
+
 	union {
 		midgard_load_store_word_t load_store;
 		midgard_scalar_alu_t scalar_alu;
@@ -73,6 +79,7 @@ typedef struct midgard_instruction {
 	static midgard_instruction m_##name(unsigned reg, unsigned address) { \
 		midgard_instruction i = { \
 			.type = TAG_LOAD_STORE_4, \
+			.unused = false, \
 			.load_store = { \
 				.op = midgard_op_##name, \
 				.mask = 0xF, \
@@ -122,6 +129,7 @@ m_alu_vector(midgard_alu_op_e op, unsigned reg1, midgard_vector_alu_src_t mod1, 
 {
 	midgard_instruction ins = {
 		.type = TAG_ALU_4,
+		.unused = false,
 		.registers = {
 			.input1_reg = reg1,
 			.input2_reg = reg2,
@@ -586,6 +594,29 @@ eliminate_constant_mov(compiler_context *ctx)
 			switch (candidate->type) {
 				case TAG_ALU_4: {
 					alu_register_word registers = candidate->registers;
+
+					/* Using it as destination invalidates the move */
+
+					if (registers.output_reg == target_reg) {
+						live = false;
+
+						/* ...but don't break! A sequence like:
+						 * a = fsin(a)
+						 * would cause the original
+						 * reference to a to die while
+						 * simultaneously using it. I
+						 * miss SSA
+						 */
+					}
+
+					/* If it's used, it's used :) */
+
+					if (registers.input1_reg == target_reg ||
+					    registers.input2_reg == target_reg) {
+						used = true;
+					}
+
+					
 					break;
 				}
 
@@ -608,10 +639,19 @@ eliminate_constant_mov(compiler_context *ctx)
 					break;
 			       }
 
+				default: {
+					printf("Unknown tag in move elimination pass\n");
+					break;
+				 }
+
 			}
 		}
 
-		printf("Move: %s\n", used ? "used" : "unused");
+		/* At this point, we know if the move is used or not. If it's
+		 * not, delete it! */
+
+		if (!used)
+			move->unused = true;
 	}
 }
 
@@ -648,7 +688,8 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 	util_dynarray_init(compiled, NULL);
 
 	util_dynarray_foreach(&ctx.current_block, midgard_instruction, ins) {
-		emit_binary_instruction(&ctx, ins, compiled);
+		if (!ins->unused)
+			emit_binary_instruction(&ctx, ins, compiled);
 	}
 
 	util_dynarray_fini(&ctx.current_block);
