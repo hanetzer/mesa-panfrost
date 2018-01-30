@@ -249,7 +249,7 @@ typedef struct compiler_context {
 	/* List of midgard_instructions emitted for the current block */
 	struct util_dynarray current_block;
 
-	struct hash_table *ssa_constants;
+	struct hash_table_u64 *ssa_constants;
 } compiler_context;
 
 static int
@@ -295,7 +295,7 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 
 	float *v = ralloc_array(ctx->ssa_constants, float, 4);
 	memcpy(v, &instr->value.f32, 4 * sizeof(float));
-	_mesa_hash_table_insert(ctx->ssa_constants, (void *) def.index, v);
+	_mesa_hash_table_u64_insert(ctx->ssa_constants, def.index, v);
 
 	midgard_instruction ins = m_fmov(REGISTER_CONSTANT, blank_alu_src, def.index);
 	attach_constants(&ins, &instr->value.f32);
@@ -596,19 +596,25 @@ static void
 inline_alu_constants(compiler_context *ctx)
 {
 	util_dynarray_foreach(&ctx->current_block, midgard_instruction, alu) {
+		printf("I\n");
 		/* Other instructions cannot inline constants */
-		if (alu->type != TAG_ALU_4) return;
+		if (alu->type != TAG_ALU_4) continue;
+		printf(".\n");
 
 		/* If there is already a constant here, we can do nothing */
-		if (alu->has_constants) return;
+		if (alu->has_constants) continue;
+		printf(".\n");
 
 		/* Constants should always be SSA... */
-		if (!alu->uses_ssa) return;
+		if (!alu->uses_ssa) continue;
+		printf(".\n");
 
-		struct hash_entry *entry = _mesa_hash_table_search(ctx->ssa_constants, (void *) alu->ssa_args.src0);
+		struct hash_entry *entry = _mesa_hash_table_u64_search(ctx->ssa_constants, alu->ssa_args.src0);
 
 		if (entry) {
 			printf("Woo!\n");
+		} else {
+			printf("Nope\n");
 		}
 	}
 }
@@ -673,7 +679,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 		nir_foreach_block(block, func->impl) {
 			util_dynarray_init(&ctx.current_block, NULL);
-			ctx.ssa_constants = _mesa_hash_table_create(NULL, _mesa_hash_pointer, _mesa_key_pointer_equal);
+			ctx.ssa_constants = _mesa_hash_table_u64_create(NULL); 
 
 			nir_foreach_instr(instr, block) {
 				emit_instr(&ctx, instr);
