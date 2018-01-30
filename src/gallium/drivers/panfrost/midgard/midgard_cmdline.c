@@ -722,9 +722,9 @@ int main(int argc, char **argv)
 
 	nir = glsl_to_nir(prog, MESA_SHADER_VERTEX, &nir_options);
 	midgard_compile_shader_nir(nir, &compiled);
-	finalise_to_disk("vertex.bin", &compiled);
+	finalise_to_disk("/dev/shm/vertex.bin", &compiled);
 
 	nir = glsl_to_nir(prog, MESA_SHADER_FRAGMENT, &nir_options);
 	midgard_compile_shader_nir(nir, &compiled);
-	finalise_to_disk("fragment.bin", &compiled);
+	finalise_to_disk("/dev/shm/fragment.bin", &compiled);
 }
