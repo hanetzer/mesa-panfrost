@@ -597,8 +597,7 @@ eliminate_constant_mov(compiler_context *ctx)
 		if (move->vector && move->vector_alu.op != midgard_alu_op_fmov) return;
 		if (!move->vector && move->scalar_alu.op != midgard_alu_op_fmov) return;
 
-		unsigned target_reg = move->registers.output_reg;
-		printf("Target reg: %d\n", target_reg);
+		unsigned target_reg = move->ssa_args.dest;
 
 		/* Scan the succeeding instructions for usage */
 
@@ -612,59 +611,9 @@ eliminate_constant_mov(compiler_context *ctx)
 		for (midgard_instruction *candidate = (move + 1); IN_ARRAY(candidate, ctx->current_block) && live && !used; candidate += 1) {
 			/* Check this candidate for usage */
 
-			switch (candidate->type) {
-				case TAG_ALU_4: {
-					alu_register_word registers = candidate->registers;
-
-					/* Using it as destination invalidates the move */
-
-					if (registers.output_reg == target_reg) {
-						live = false;
-
-						/* ...but don't break! A sequence like:
-						 * a = fsin(a)
-						 * would cause the original
-						 * reference to a to die while
-						 * simultaneously using it. I
-						 * miss SSA
-						 */
-					}
-
-					/* If it's used, it's used :) */
-
-					if (registers.input1_reg == target_reg ||
-					    registers.input2_reg == target_reg) {
-						used = true;
-					}
-
-					
-					break;
-				}
-
-				case TAG_LOAD_STORE_4: {
-					midgard_load_store_word_t word = candidate->load_store;
-
-					/* Only check if this register is relevant */
-
-					if (word.reg != target_reg) break;
-
-					/* Loads invalidate the original move */
-
-					if (!OP_IS_STORE(word.op)) {
-						live = false;
-						break;
-					}
-
-					/* At this point, we know that we are using this register! */
-					used = true;
-					break;
-			       }
-
-				default: {
-					printf("Unknown tag in move elimination pass\n");
-					break;
-				 }
-
+			if (candidate->ssa_args.src0 == target_reg ||
+			    candidate->ssa_args.src1 == target_reg) {
+				used = true;
 			}
 		}
 
