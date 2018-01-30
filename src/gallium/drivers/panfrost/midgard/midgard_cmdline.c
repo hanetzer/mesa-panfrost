@@ -592,30 +592,31 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
  * This is handled here. It does *not* remove the original move, since this is
  * not safe at this stage. eliminate_constant_mov will handle this */
 
+#define CONDITIONAL_ATTACH(src) { \
+	void *entry = _mesa_hash_table_u64_search(ctx->ssa_constants, alu->ssa_args.src); \
+\
+	if (entry) { \
+		attach_constants(alu, entry); \
+		alu->ssa_args.src = REGISTER_CONSTANT; \
+		break; \
+	} \
+}
+
 static void
 inline_alu_constants(compiler_context *ctx)
 {
 	util_dynarray_foreach(&ctx->current_block, midgard_instruction, alu) {
-		printf("I\n");
 		/* Other instructions cannot inline constants */
 		if (alu->type != TAG_ALU_4) continue;
-		printf(".\n");
 
 		/* If there is already a constant here, we can do nothing */
 		if (alu->has_constants) continue;
-		printf(".\n");
 
 		/* Constants should always be SSA... */
 		if (!alu->uses_ssa) continue;
-		printf(".\n");
 
-		struct hash_entry *entry = _mesa_hash_table_u64_search(ctx->ssa_constants, alu->ssa_args.src0);
-
-		if (entry) {
-			printf("Woo!\n");
-		} else {
-			printf("Nope\n");
-		}
+		CONDITIONAL_ATTACH(src0);
+		CONDITIONAL_ATTACH(src1);
 	}
 }
 
