@@ -248,6 +248,8 @@ typedef struct compiler_context {
 
 	/* List of midgard_instructions emitted for the current block */
 	struct util_dynarray current_block;
+
+	struct hash_table *ssa_constants;
 } compiler_context;
 
 static int
@@ -290,6 +292,10 @@ static void
 emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 {
 	nir_ssa_def def = instr->def;
+
+	float *v = ralloc_array(ctx->ssa_constants, float, 4);
+	memcpy(v, &instr->value.f32, 4 * sizeof(float));
+	_mesa_hash_table_insert(ctx->ssa_constants, (void *) def.index, v);
 
 	midgard_instruction ins = m_fmov(REGISTER_CONSTANT, blank_alu_src, def.index);
 	attach_constants(&ins, &instr->value.f32);
@@ -581,6 +587,32 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 	}
 }
 
+
+/* ALU instructions can inline constants, which decreases register pressure.
+ * This is handled here. It does *not* remove the original move, since this is
+ * not safe at this stage. eliminate_constant_mov will handle this */
+
+static void
+inline_alu_constants(compiler_context *ctx)
+{
+	util_dynarray_foreach(&ctx->current_block, midgard_instruction, alu) {
+		/* Other instructions cannot inline constants */
+		if (alu->type != TAG_ALU_4) return;
+
+		/* If there is already a constant here, we can do nothing */
+		if (alu->has_constants) return;
+
+		/* Constants should always be SSA... */
+		if (!alu->uses_ssa) return;
+
+		struct hash_entry *entry = _mesa_hash_table_search(ctx->ssa_constants, (void *) alu->ssa_args.src0);
+
+		if (entry) {
+			printf("Woo!\n");
+		}
+	}
+}
+
 /* While NIR handles this most of the time, sometimes we generate unnecessary
  * mov instructions ourselves, in particular from the load_const routine if
  * constants are inlined. As a peephole optimisation, eliminate redundant moves
@@ -641,10 +673,13 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 		nir_foreach_block(block, func->impl) {
 			util_dynarray_init(&ctx.current_block, NULL);
+			ctx.ssa_constants = _mesa_hash_table_create(NULL, _mesa_hash_pointer, _mesa_key_pointer_equal);
 
 			nir_foreach_instr(instr, block) {
 				emit_instr(&ctx, instr);
 			}
+
+			inline_alu_constants(&ctx);
 
 			/* Artefact of load_const in the average case */
 			eliminate_constant_mov(&ctx);
