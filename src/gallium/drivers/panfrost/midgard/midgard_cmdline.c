@@ -41,15 +41,31 @@
 
 #include "midgard.h"
 
+/* Instruction arguments represented as block-local SSA indices, rather than
+ * registers. Negative values mean unused. */
+
+typedef struct {
+	int src0;
+	int src1;
+	int dest;
+} ssa_args;
+
 /* Generic in-memory data type repesenting a single logical instruction, rather
  * than a single instruction group. This is the preferred form for code gen.
  * Multiple midgard_insturctions will later be combined during scheduling,
  * though this is not represented in this structure.  Its format bridges
  * the low-level binary representation with the higher level semantic meaning.
+ *
+ * Notably, it allows registers to be specified as block local SSA, for code
+ * emitted before the register allocation pass.
  */
 
 typedef struct midgard_instruction {
 	midgard_word_type type; /* ALU, load/store, texture */
+
+	/* If the register allocator has not run yet... */
+	bool uses_ssa;
+	ssa_args ssa_args;
 
 	/* Special fields for an ALU instruction */
 	bool vector; 
@@ -75,22 +91,30 @@ typedef struct midgard_instruction {
 /* Helpers to generate midgard_instruction's using macro magic, since every
  * driver seems to do it that way */
 
-#define M_LOAD_STORE(name) \
-	static midgard_instruction m_##name(unsigned reg, unsigned address) { \
+#define M_LOAD_STORE(name, rname, uname) \
+	static midgard_instruction m_##name(unsigned ssa, unsigned address) { \
 		midgard_instruction i = { \
 			.type = TAG_LOAD_STORE_4, \
+			.uses_ssa = true, \
+			.ssa_args = { \
+				.rname = ssa, \
+				.uname = -1, \
+				.src1 = -1 \
+			}, \
 			.unused = false, \
 			.load_store = { \
 				.op = midgard_op_##name, \
 				.mask = 0xF, \
 				.swizzle = SWIZZLE(COMPONENT_X, COMPONENT_Y, COMPONENT_Z, COMPONENT_W), \
-				.reg = reg, \
 				.address = address \
 			} \
 		}; \
 		\
 		return i; \
 	}
+
+#define M_LOAD(name) M_LOAD_STORE(name, dest, src0)
+#define M_STORE(name) M_LOAD_STORE(name, src0, dest)
 
 const midgard_vector_alu_src_t blank_alu_src = {
 	.abs = 0,
@@ -125,15 +149,16 @@ alu_src_to_unsigned(midgard_vector_alu_src_t src)
 }
 
 static midgard_instruction
-m_alu_vector(midgard_alu_op_e op, unsigned reg1, midgard_vector_alu_src_t mod1, unsigned reg2, midgard_vector_alu_src_t mod2, unsigned reg3)
+m_alu_vector(midgard_alu_op_e op, unsigned src0, midgard_vector_alu_src_t mod1, unsigned src1, midgard_vector_alu_src_t mod2, unsigned dest)
 {
 	midgard_instruction ins = {
 		.type = TAG_ALU_4,
 		.unused = false,
-		.registers = {
-			.input1_reg = reg1,
-			.input2_reg = reg2,
-			.output_reg = reg3
+		.uses_ssa = true,
+		.ssa_args = {
+			.src0 = src0,
+			.src1 = src1,
+			.dest = dest
 		},
 		.vector = true,
 		.vector_alu = {
@@ -152,7 +177,7 @@ m_alu_vector(midgard_alu_op_e op, unsigned reg1, midgard_vector_alu_src_t mod1, 
 
 #define M_ALU_VECTOR_1(name) \
 	static midgard_instruction m_##name(unsigned src, midgard_vector_alu_src_t mod1, unsigned dest) { \
-		return m_alu_vector(midgard_alu_op_##name, src, mod1, REGISTER_UNUSED, blank_alu_src, dest); \
+		return m_alu_vector(midgard_alu_op_##name, src, mod1, -1, blank_alu_src, dest); \
 	}
 
 #define M_ALU_VECTOR_2(name) \
@@ -165,15 +190,15 @@ m_alu_vector(midgard_alu_op_e op, unsigned reg1, midgard_vector_alu_src_t mod1, 
  * don't support half-floats -- this requires changes in other parts of the
  * compiler -- therefore the 16-bit versions are commented out. */
 
-M_LOAD_STORE(ld_st_noop);
-//M_LOAD_STORE(load_attr_16);
-M_LOAD_STORE(load_attr_32);
-//M_LOAD_STORE(load_vary_16);
-M_LOAD_STORE(load_vary_32);
-//M_LOAD_STORE(load_uniform_16);
-M_LOAD_STORE(load_uniform_32);
-//M_LOAD_STORE(store_vary_16);
-M_LOAD_STORE(store_vary_32);
+M_LOAD(ld_st_noop);
+//M_LOAD(load_attr_16);
+M_LOAD(load_attr_32);
+//M_LOAD(load_vary_16);
+M_LOAD(load_vary_32);
+//M_LOAD(load_uniform_16);
+M_LOAD(load_uniform_32);
+//M_STORE(store_vary_16);
+M_STORE(store_vary_32);
 
 M_ALU_VECTOR_2(fadd);
 M_ALU_VECTOR_2(fmul);
@@ -259,38 +284,6 @@ optimise_nir(nir_shader *nir)
 				nir_var_shader_out |
 				nir_var_local);
 	} while(progress);
-
-	NIR_PASS_V(nir, nir_convert_from_ssa, false);
-}
-
-/* TODO: REGISTER ALLOCATION!!! */
-
-static unsigned
-ssa_to_register(nir_ssa_def *def)
-{
-	return 8 + def->index;
-}
-
-static unsigned
-resolve_source_register(nir_src src)
-{
-	if (src.is_ssa) {
-		printf("--TODO: RESOLVE REGISTER!--\n");
-		return ssa_to_register(src.ssa);
-	} else {
-		return src.reg.reg->index;
-	}
-}
-
-static unsigned
-resolve_destination_register(nir_dest src)
-{
-	if (src.is_ssa) {
-		printf("--TODO: RESOLVE REGISTER!--\n");
-		return ssa_to_register(&src.ssa);
-	} else {
-		return src.reg.reg->index;
-	}
 }
 
 static void
@@ -298,7 +291,7 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 {
 	nir_ssa_def def = instr->def;
 
-	midgard_instruction ins = m_fmov(REGISTER_CONSTANT, blank_alu_src, ssa_to_register(&def));
+	midgard_instruction ins = m_fmov(REGISTER_CONSTANT, blank_alu_src, def.index);
 	attach_constants(&ins, &instr->value.f32);
 	util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 }
@@ -306,20 +299,20 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 #define EMIT_ALU_CASE_1(op_nir, op_midgard) \
 	case nir_op_##op_nir: \
 		ins = m_##op_midgard( \
-			resolve_source_register(instr->src[0].src), \
+			instr->src[0].src.ssa->index, \
 			n2m_alu_modifiers(&instr->src[0]), \
-			resolve_destination_register(instr->dest.dest)); \
+			instr->dest.dest.ssa.index); \
 		util_dynarray_append(&ctx->current_block, midgard_instruction, ins); \
 		break;
 
 #define EMIT_ALU_CASE_2(op_nir, op_midgard) \
 	case nir_op_##op_nir: \
 		ins = m_##op_midgard( \
-			resolve_source_register(instr->src[0].src), \
+			instr->src[0].src.ssa->index, \
 			n2m_alu_modifiers(&instr->src[0]), \
-			resolve_source_register(instr->src[1].src), \
+			instr->src[1].src.ssa->index, \
 			n2m_alu_modifiers(&instr->src[1]), \
-			resolve_destination_register(instr->dest.dest)); \
+			instr->dest.dest.ssa.index); \
 		util_dynarray_append(&ctx->current_block, midgard_instruction, ins); \
 		break;
 
@@ -404,7 +397,7 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			assert(offset % 4 == 0);
 			offset = offset / 4;
 
-			reg = resolve_destination_register(instr->dest);
+			reg = instr->dest.ssa.index;
 
 			util_dynarray_append(&ctx->current_block, midgard_instruction, 
 				instr->intrinsic == nir_intrinsic_load_uniform ? 
@@ -422,7 +415,7 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			offset = nir_intrinsic_base(instr) + const_offset->u32[0];
 			offset = offset * 4 + nir_intrinsic_component(instr);
 
-			reg = resolve_source_register(instr->src[0]);
+			reg = instr->src[0].ssa->index;
 
 			util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32(reg, offset));
 
