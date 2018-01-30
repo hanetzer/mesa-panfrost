@@ -452,6 +452,34 @@ emit_instr(compiler_context *ctx, struct nir_instr *instr)
 	}
 }
 
+/* TODO: Write a register allocator. But for now, just set register = ssa index... */
+
+static void
+allocate_registers(compiler_context *ctx)
+{
+	util_dynarray_foreach(&ctx->current_block, midgard_instruction, ins) {
+		ssa_args args = ins->ssa_args;
+
+		switch (ins->type) {
+			case TAG_ALU_4:
+				ins->registers.output_reg = args.dest;
+				ins->registers.input1_reg = args.src0;
+				ins->registers.input2_reg = (args.src1 >= 0) ? args.src1 : REGISTER_UNUSED;
+				
+				break;
+			
+			case TAG_LOAD_STORE_4:
+				ins->load_store.reg = (args.dest >= 0) ? args.dest : args.src0;
+				break;
+
+			default: 
+				printf("Unknown tag in register assignment pass\n");
+				break;
+		}
+	}
+}
+
+
 /* Midgard prefetches instruction types, so during emission we need to
  * lookahead too. Unless this is the last instruction, in which we return 1. Or
  * if this is the second to last and the last is an ALU, then it's also 1... */
@@ -671,6 +699,9 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 			/* Artefact of load_const in the average case */
 			eliminate_constant_mov(&ctx);
+
+			/* Finally, register allocation! Must be done after everything else */
+			allocate_registers(&ctx);
 
 			break; /* TODO: Multi-block shaders */
 		}
