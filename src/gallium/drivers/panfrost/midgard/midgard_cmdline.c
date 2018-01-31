@@ -581,13 +581,26 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 			midgard_load_store_word_t current = ins->load_store;
 			memcpy(&current64, &current, sizeof(current));
 
+			bool filled_next = false;
+
 			if (lookahead_tag == TAG_LOAD_STORE_4) {
 				midgard_load_store_word_t next = (ins + 1)->load_store;
-				memcpy(&next64, &next, sizeof(next));
 
-				/* Skip ahead one, since it's redundant with the pair */
-				instructions_emitted++;
-			} else {
+				/* As the two operate concurrently (TODO:
+				 * verify), make sure they are not dependent */
+
+				if (!(OP_IS_STORE(next.op) && !OP_IS_STORE(current.op) &&
+				      next.reg == current.reg)) {
+					memcpy(&next64, &next, sizeof(next));
+
+					/* Skip ahead one, since it's redundant with the pair */
+					instructions_emitted++;
+
+					filled_next = true;
+				}
+			}
+
+			if (!filled_next) {
 				midgard_load_store_word_t noop = m_ld_st_noop(0, 0).load_store;
 				memcpy(&next64, &noop, sizeof(noop));
 			}
