@@ -512,11 +512,20 @@ get_lookahead_type(struct util_dynarray block, midgard_instruction *ins)
 #define EMIT_AND_COUNT(type, val) util_dynarray_append(emission, type, val); \
 				  bytes_emitted += sizeof(type)
 
-static void
+/* Returns the number of instructions emitted (minus one). In trivial cases,
+ * this equals one (zero returned), but when instructions are paired (the
+ * optimal case) this can be two, or in the best case for ALUs, up to five. */
+
+static int
 emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct util_dynarray *emission)
 {
+	/* TODO: Handle this with pairing */
 	if (ins->type == TAG_ALU_4 && ins->has_constants) ins->type = TAG_ALU_8;
-	uint8_t tag = ins->type | (get_lookahead_type(ctx->current_block, ins) << 4);
+
+	int instructions_emitted = 0;
+
+	uint8_t lookahead_tag = get_lookahead_type(ctx->current_block, ins);
+	uint8_t tag = ins->type | (lookahead_tag << 4);
 
 	switch(ins->type) {
 		case TAG_ALU_4:
@@ -558,22 +567,35 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 		 }
 
 		case TAG_LOAD_STORE_4: {
-			/* Load store instructions have two words at once. We
-			 * only have one queued up, so we need to NOP pad.
-			 * TODO: Make less bad. */
+			/* Load store instructions have two words at once. If we
+			 * only have one queued up, we need to NOP pad.
+			 * Otherwise, we store both in succession to save space
+			 * (and cycles? Unclear) and skip the next. The
+			 * usefulness of this optimisation is greatly dependent
+			 * on the quality of the (presently nonexistent)
+			 * instruction scheduler.
+			 */
 
-			midgard_load_store_word_t actual = ins->load_store;
-			midgard_load_store_word_t fake = m_ld_st_noop(0, 0).load_store;
+			uint64_t current64, next64;
+			
+			midgard_load_store_word_t current = ins->load_store;
+			memcpy(&current64, &current, sizeof(current));
 
-			uint64_t actual64, fake64;
+			if (lookahead_tag == TAG_LOAD_STORE_4) {
+				midgard_load_store_word_t next = (ins + 1)->load_store;
+				memcpy(&next64, &next, sizeof(next));
 
-			memcpy(&actual64, &actual, sizeof(actual));
-			memcpy(&fake64, &fake, sizeof(fake));
+				/* Skip ahead one, since it's redundant with the pair */
+				instructions_emitted++;
+			} else {
+				midgard_load_store_word_t noop = m_ld_st_noop(0, 0).load_store;
+				memcpy(&next64, &noop, sizeof(noop));
+			}
 
 			midgard_load_store_t instruction = {
 				.tag = tag,
-				.word1 = actual64,
-				.word2 = fake64
+				.word1 = current64,
+				.word2 = next64
 			};
 
 			util_dynarray_append(emission, midgard_load_store_t, instruction);
@@ -585,6 +607,8 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 			printf("Unknown midgard instruction type\n");
 			break;
 	}
+
+	return instructions_emitted;
 }
 
 
@@ -702,7 +726,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 	util_dynarray_foreach(&ctx.current_block, midgard_instruction, ins) {
 		if (!ins->unused)
-			emit_binary_instruction(&ctx, ins, compiled);
+			ins += emit_binary_instruction(&ctx, ins, compiled);
 	}
 
 	util_dynarray_fini(&ctx.current_block);
