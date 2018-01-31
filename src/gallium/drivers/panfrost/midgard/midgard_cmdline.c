@@ -642,17 +642,15 @@ eliminate_constant_mov(compiler_context *ctx)
 
 		bool used = false;
 
-		/* If the register has been overwritten, the search stops, so
-		 * keep track of live status */
-		
-		bool live = true;
-
-		for (midgard_instruction *candidate = (move + 1); IN_ARRAY(candidate, ctx->current_block) && live && !used; candidate += 1) {
+		for (midgard_instruction *candidate = (move + 1);
+		     IN_ARRAY(candidate, ctx->current_block);
+		     candidate += 1) {
 			/* Check this candidate for usage */
 
 			if (candidate->ssa_args.src0 == target_reg ||
 			    candidate->ssa_args.src1 == target_reg) {
 				used = true;
+				break;
 			}
 		}
 
