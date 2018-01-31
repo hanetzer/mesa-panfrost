@@ -725,21 +725,27 @@ finalise_to_disk(const char *filename, struct util_dynarray *data)
 }
 
 static const nir_shader_compiler_options nir_options = {
-		.lower_fpow = true,
-		.lower_fsat = true,
-		.lower_scmp = true,
-		.lower_flrp32 = true,
-		.lower_flrp64 = true,
-		.lower_ffract = true,
-		.lower_fmod32 = true,
-		.lower_fmod64 = true,
-		.lower_fdiv = true,
-		.lower_fsinpi = true,
-		.fuse_ffma = true,
-		.native_integers = true,
-		.vertex_id_zero_based = true,
-		.lower_extract_byte = true,
-		.lower_extract_word = true,
+	.lower_fpow = true,
+	.lower_fsat = true,
+	.lower_scmp = true,
+	.lower_flrp32 = true,
+	.lower_flrp64 = true,
+	.lower_ffract = true,
+	.lower_fmod32 = true,
+	.lower_fmod64 = true,
+	.lower_fdiv = true,
+	.lower_fsinpi = true,
+
+	.vertex_id_zero_based = true,
+	.lower_extract_byte = true,
+	.lower_extract_word = true,
+
+
+	/* TODO: Reenable when FMA is understood */
+	//.fuse_ffma = true,
+
+	/* TODO: Reenable when integer ops are understood */
+	//.native_integers = true,
 };
 
 int main(int argc, char **argv)
