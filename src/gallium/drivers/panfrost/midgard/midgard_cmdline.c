@@ -632,9 +632,9 @@ eliminate_constant_mov(compiler_context *ctx)
 	util_dynarray_foreach(&ctx->current_block, midgard_instruction, move) {
 		/* Only interest ourselves with fmov instructions */
 		
-		if (move->type != TAG_ALU_4) return;
-		if (move->vector && move->vector_alu.op != midgard_alu_op_fmov) return;
-		if (!move->vector && move->scalar_alu.op != midgard_alu_op_fmov) return;
+		if (move->type != TAG_ALU_4) continue;
+		if (move->vector && move->vector_alu.op != midgard_alu_op_fmov) continue;
+		if (!move->vector && move->scalar_alu.op != midgard_alu_op_fmov) continue;
 
 		unsigned target_reg = move->ssa_args.dest;
 
