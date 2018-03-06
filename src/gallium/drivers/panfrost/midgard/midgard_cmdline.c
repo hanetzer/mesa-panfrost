@@ -122,7 +122,7 @@ const midgard_vector_alu_src_t blank_alu_src = {
 	.rep_low = 0,
 	.rep_high = 0,
 	.half = 0,
-	.swizzle = SWIZZLE(COMPONENT_X, COMPONENT_Y, COMPONENT_Z, COMPONENT_W)
+	.swizzle = 0, /* Note: this is essentially a swizzle of xxxx */
 };
 
 static midgard_vector_alu_src_t
@@ -469,8 +469,8 @@ allocate_registers(compiler_context *ctx)
 		switch (ins->type) {
 			case TAG_ALU_4:
 				ins->registers.output_reg = args.dest;
-				ins->registers.input1_reg = args.src0;
-				ins->registers.input2_reg = (args.src1 >= 0) ? args.src1 : REGISTER_UNUSED;
+				ins->registers.input1_reg = (args.src1 >= 0) ? args.src1 : REGISTER_UNUSED;
+				ins->registers.input2_reg = args.src0;
 				
 				break;
 			
