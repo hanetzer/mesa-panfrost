@@ -184,6 +184,33 @@ __attribute__((__packed__))
 	bool src2_imm     : 1;
 } midgard_reg_info_t;
 
+/* Compact writeouts */
+
+typedef enum
+{
+	midgard_jmp_writeout_op_branch_uncond = 1,
+	midgard_jmp_writeout_op_branch_cond = 2,
+	midgard_jmp_writeout_op_writeout = 7,
+} midgard_jmp_writeout_op_e;
+
+typedef struct
+__attribute__((__packed__))
+{
+	midgard_jmp_writeout_op_e op : 3; /* == branch_uncond */
+	unsigned dest_tag : 4; /* tag of branch destination */
+	unsigned unknown : 2;
+	int offset : 7;
+} midgard_branch_uncond_t;
+
+typedef struct
+__attribute__((__packed__))
+{
+	midgard_jmp_writeout_op_e op : 3; /* == branch_cond */
+	unsigned dest_tag : 4; /* tag of branch destination */
+	int offset : 7;
+	unsigned cond : 2;
+} midgard_branch_cond_t;
+
 /*
  * Load/store words
  */
@@ -253,3 +280,7 @@ __attribute__((__packed__))
 #define COMPONENT_Y 0x1
 #define COMPONENT_Z 0x2
 #define COMPONENT_W 0x3
+
+/* Output writing "condition" for the branch (all one's) */
+
+#define COND_FBWRITE 0x3

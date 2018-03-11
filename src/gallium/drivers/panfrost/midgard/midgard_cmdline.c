@@ -251,15 +251,25 @@ M_ALU_VECTOR_1(synthwrite);
  * no? */
 
 static midgard_instruction
-m_alu_br_compact(uint16_t val)
+m_alu_br_compact_cond(midgard_jmp_writeout_op_e op, unsigned tag, signed offset, unsigned cond)
 {
+	midgard_branch_cond_t branch = {
+		.op = op,
+		.dest_tag = tag,
+		.offset = offset,
+		.cond = cond
+	};
+
+	uint16_t compact;
+	memcpy(&compact, &branch, sizeof(branch));
+
 	midgard_instruction ins = {
 		.type = TAG_ALU_4,
 		.unused = false,
 		.uses_ssa = false,
 
 		.compact_branch = true, 
-		.br_compact = val,
+		.br_compact = compact
 	};
 
 	return ins;
@@ -805,13 +815,13 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 			allocate_registers(ctx);
 
 			/* Append fragment shader epilogue (value writeout) */
-			EMIT(alu_br_compact, 0xF00F);
+			EMIT(alu_br_compact_cond, midgard_jmp_writeout_op_writeout, TAG_ALU_4, 0, COND_FBWRITE);
 
 			/* Errata workaround -- the above write
 			 * can sometimes fail -.- */
 
 			EMIT(fmov, 0, blank_alu_src, 0, true);
-			EMIT(alu_br_compact, 0xF00F);
+			EMIT(alu_br_compact_cond, midgard_jmp_writeout_op_writeout, TAG_ALU_4, -1, COND_FBWRITE);
 
 			break; /* TODO: Multi-block shaders */
 		}
