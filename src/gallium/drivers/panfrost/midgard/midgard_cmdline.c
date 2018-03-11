@@ -48,6 +48,10 @@ typedef struct {
 	int src0;
 	int src1;
 	int dest;
+
+	/* The output is -not- SSA -- it's a direct register from I/O -- and
+	 * must not be culled/renamed */
+	bool literal_out;
 } ssa_args;
 
 /* Generic in-memory data type repesenting a single logical instruction, rather
@@ -94,9 +98,7 @@ typedef struct midgard_instruction {
 /* Helpers to generate midgard_instruction's using macro magic, since every
  * driver seems to do it that way */
 
-#define EMIT(op, ...) util_dynarray_append(&ctx->current_block, \
-					   midgard_instruction, \
-					   m_##op(__VA_ARGS__));
+#define EMIT(op, ...) util_dynarray_append(&(ctx->current_block), midgard_instruction, m_##op(__VA_ARGS__));
 
 #define M_LOAD_STORE(name, rname, uname) \
 	static midgard_instruction m_##name(unsigned ssa, unsigned address) { \
@@ -154,8 +156,9 @@ alu_src_to_unsigned(midgard_vector_alu_src_t src)
 }
 
 static midgard_instruction
-m_alu_vector(midgard_alu_op_e op, unsigned src0, midgard_vector_alu_src_t mod1, unsigned src1, midgard_vector_alu_src_t mod2, unsigned dest)
+m_alu_vector(midgard_alu_op_e op, unsigned src0, midgard_vector_alu_src_t mod1, unsigned src1, midgard_vector_alu_src_t mod2, unsigned dest, bool literal_out)
 {
+	/* TODO: Use literal_out hint during register allocation */
 	midgard_instruction ins = {
 		.type = TAG_ALU_4,
 		.unused = false,
@@ -163,7 +166,8 @@ m_alu_vector(midgard_alu_op_e op, unsigned src0, midgard_vector_alu_src_t mod1, 
 		.ssa_args = {
 			.src0 = src0,
 			.src1 = src1,
-			.dest = dest
+			.dest = dest,
+			.literal_out = literal_out
 		},
 		.vector = true,
 		.vector_alu = {
@@ -181,13 +185,13 @@ m_alu_vector(midgard_alu_op_e op, unsigned src0, midgard_vector_alu_src_t mod1, 
 }
 
 #define M_ALU_VECTOR_1(name) \
-	static midgard_instruction m_##name(unsigned src, midgard_vector_alu_src_t mod1, unsigned dest) { \
-		return m_alu_vector(midgard_alu_op_##name, -1, zero_alu_src, src, mod1, dest); \
+	static midgard_instruction m_##name(unsigned src, midgard_vector_alu_src_t mod1, unsigned dest, bool literal) { \
+		return m_alu_vector(midgard_alu_op_##name, -1, zero_alu_src, src, mod1, dest, literal); \
 	}
 
 #define M_ALU_VECTOR_2(name) \
-	static midgard_instruction m_##name(unsigned src1, midgard_vector_alu_src_t mod1, unsigned src2, midgard_vector_alu_src_t mod2, unsigned dest) { \
-		return m_alu_vector(midgard_alu_op_##name, src1, mod1, src2, mod2, dest); \
+	static midgard_instruction m_##name(unsigned src1, midgard_vector_alu_src_t mod1, unsigned src2, midgard_vector_alu_src_t mod2, unsigned dest, bool literal) { \
+		return m_alu_vector(midgard_alu_op_##name, src1, mod1, src2, mod2, dest, literal); \
 	}
 
 /* load/store instructions have both 32-bit and 16-bit variants, depending on
@@ -323,7 +327,7 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 	memcpy(v, &instr->value.f32, 4 * sizeof(float));
 	_mesa_hash_table_u64_insert(ctx->ssa_constants, def.index, v);
 
-	midgard_instruction ins = m_fmov(REGISTER_CONSTANT, blank_alu_src, def.index);
+	midgard_instruction ins = m_fmov(REGISTER_CONSTANT, blank_alu_src, def.index, false);
 	attach_constants(&ins, &instr->value.f32);
 	util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 }
@@ -333,7 +337,8 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 		ins = m_##op_midgard( \
 			instr->src[0].src.ssa->index, \
 			n2m_alu_modifiers(&instr->src[0]), \
-			instr->dest.dest.ssa.index); \
+			instr->dest.dest.ssa.index, \
+			false); \
 		util_dynarray_append(&ctx->current_block, midgard_instruction, ins); \
 		break;
 
@@ -344,7 +349,8 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 			n2m_alu_modifiers(&instr->src[0]), \
 			instr->src[1].src.ssa->index, \
 			n2m_alu_modifiers(&instr->src[1]), \
-			instr->dest.dest.ssa.index); \
+			instr->dest.dest.ssa.index, \
+			false); \
 		util_dynarray_append(&ctx->current_block, midgard_instruction, ins); \
 		break;
 
@@ -468,15 +474,8 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 					 * the shader and we do the framebuffer
 					 * writeout dance. TODO: Defer writes */
 
-					EMIT(fmov, reg, blank_alu_src, 0);
-					EMIT(alu_br_compact, 0xF00F);
-
-					/* Errata workaround -- the above write
-					 * can sometimes fail -.- */
-
-					EMIT(fmov, 0, blank_alu_src, 0);
-					EMIT(alu_br_compact, 0xF00F);
-
+					printf("%p\n", &ctx->current_block);
+					EMIT(fmov, reg, blank_alu_src, 0, true);
 					break;
 				}
 			}
@@ -743,6 +742,10 @@ eliminate_constant_mov(compiler_context *ctx)
 		if (move->vector && move->vector_alu.op != midgard_alu_op_fmov) continue;
 		if (!move->vector && move->scalar_alu.op != midgard_alu_op_fmov) continue;
 
+		/* If this is a literal move (used in tandem with I/O), it cannot be removed */
+		
+		if (move->ssa_args.literal_out) continue;
+
 		unsigned target_reg = move->ssa_args.dest;
 
 		/* Scan the succeeding instructions for usage */
@@ -772,9 +775,11 @@ eliminate_constant_mov(compiler_context *ctx)
 static int
 midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 {
-	compiler_context ctx = {
+	compiler_context ictx = {
 		.stage = nir->info.stage
 	};
+
+	compiler_context *ctx = &ictx;
 
 	optimise_nir(nir);
 	nir_print_shader(nir, stdout);
@@ -784,20 +789,29 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 			continue;
 
 		nir_foreach_block(block, func->impl) {
-			util_dynarray_init(&ctx.current_block, NULL);
-			ctx.ssa_constants = _mesa_hash_table_u64_create(NULL); 
+			util_dynarray_init(&ctx->current_block, NULL);
+			ctx->ssa_constants = _mesa_hash_table_u64_create(NULL); 
 
 			nir_foreach_instr(instr, block) {
-				emit_instr(&ctx, instr);
+				emit_instr(ctx, instr);
 			}
 
-			inline_alu_constants(&ctx);
+			inline_alu_constants(ctx);
 
 			/* Artefact of load_const in the average case */
-			eliminate_constant_mov(&ctx);
+			eliminate_constant_mov(ctx);
 
 			/* Finally, register allocation! Must be done after everything else */
-			allocate_registers(&ctx);
+			allocate_registers(ctx);
+
+			/* Append fragment shader epilogue (value writeout) */
+			EMIT(alu_br_compact, 0xF00F);
+
+			/* Errata workaround -- the above write
+			 * can sometimes fail -.- */
+
+			EMIT(fmov, 0, blank_alu_src, 0, true);
+			EMIT(alu_br_compact, 0xF00F);
 
 			break; /* TODO: Multi-block shaders */
 		}
@@ -807,12 +821,12 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 	util_dynarray_init(compiled, NULL);
 
-	util_dynarray_foreach(&ctx.current_block, midgard_instruction, ins) {
+	util_dynarray_foreach(&ctx->current_block, midgard_instruction, ins) {
 		if (!ins->unused)
-			ins += emit_binary_instruction(&ctx, ins, compiled);
+			ins += emit_binary_instruction(ctx, ins, compiled);
 	}
 
-	util_dynarray_fini(&ctx.current_block);
+	util_dynarray_fini(&ctx->current_block);
 
 	/* TODO: Propagate compiled code up correctly */
 	return 0;
