@@ -600,8 +600,12 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 			}
 
 			if (!filled_next) {
-				midgard_load_store_word_t noop = m_ld_st_noop(0, 0).load_store;
-				memcpy(&next64, &noop, sizeof(noop));
+				/* While this is good reason for this number
+				 * (see the ISA notes), for our purposes we can
+				 * just use it as a magic number until it
+				 * breaks ;) */
+
+				next64 = 3;
 			}
 
 			midgard_load_store_t instruction = {
