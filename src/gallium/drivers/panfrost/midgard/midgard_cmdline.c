@@ -775,10 +775,6 @@ static const nir_shader_compiler_options nir_options = {
 	.lower_extract_byte = true,
 	.lower_extract_word = true,
 
-
-	/* TODO: Reenable when FMA is understood */
-	//.fuse_ffma = true,
-
 	/* TODO: Reenable when integer ops are understood */
 	//.native_integers = true,
 };
