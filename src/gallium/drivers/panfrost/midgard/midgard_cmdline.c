@@ -117,13 +117,11 @@ typedef struct midgard_instruction {
 #define M_STORE(name) M_LOAD_STORE(name, src0, dest)
 
 const midgard_vector_alu_src_t blank_alu_src = {
-	.abs = 0,
-	.negate = 0,
-	.rep_low = 0,
-	.rep_high = 0,
-	.half = 0,
-	.swizzle = 0, /* Note: this is essentially a swizzle of xxxx */
+	.swizzle = SWIZZLE(COMPONENT_X, COMPONENT_Y, COMPONENT_Z, COMPONENT_W),
 };
+
+/* Used for encoding the unused source of 1-op instructions */
+const midgard_vector_alu_src_t zero_alu_src = { 0 };
 
 static midgard_vector_alu_src_t
 n2m_alu_modifiers(nir_alu_src *src)
@@ -177,7 +175,7 @@ m_alu_vector(midgard_alu_op_e op, unsigned src0, midgard_vector_alu_src_t mod1, 
 
 #define M_ALU_VECTOR_1(name) \
 	static midgard_instruction m_##name(unsigned src, midgard_vector_alu_src_t mod1, unsigned dest) { \
-		return m_alu_vector(midgard_alu_op_##name, src, mod1, -1, blank_alu_src, dest); \
+		return m_alu_vector(midgard_alu_op_##name, -1, zero_alu_src, src, mod1, dest); \
 	}
 
 #define M_ALU_VECTOR_2(name) \
@@ -470,8 +468,8 @@ allocate_registers(compiler_context *ctx)
 		switch (ins->type) {
 			case TAG_ALU_4:
 				ins->registers.output_reg = args.dest;
-				ins->registers.input1_reg = (args.src1 >= 0) ? args.src1 : REGISTER_UNUSED;
-				ins->registers.input2_reg = args.src0;
+				ins->registers.input1_reg = (args.src0 >= 0) ? args.src0 : REGISTER_UNUSED;
+				ins->registers.input2_reg = args.src1;
 				
 				break;
 			
