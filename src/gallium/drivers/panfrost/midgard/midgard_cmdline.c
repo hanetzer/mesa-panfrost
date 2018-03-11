@@ -471,6 +471,12 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 					EMIT(fmov, reg, blank_alu_src, 0);
 					EMIT(alu_br_compact, 0xF00F);
 
+					/* Errata workaround -- the above write
+					 * can sometimes fail -.- */
+
+					EMIT(fmov, 0, blank_alu_src, 0);
+					EMIT(alu_br_compact, 0xF00F);
+
 					break;
 				}
 			}
