@@ -160,7 +160,7 @@ __attribute__((__packed__))
 #define ALU_ENAB_SCAL_ADD   (1 << 19)
 #define ALU_ENAB_VEC_ADD    (1 << 21)
 #define ALU_ENAB_SCAL_MUL   (1 << 23)
-#define ALU_ENAB_LUT        (1 << 25)
+#define ALU_ENAB_VEC_LUT    (1 << 25)
 #define ALU_ENAB_BR_COMPACT (1 << 26)
 #define ALU_ENAB_BRANCH     (1 << 27)
 

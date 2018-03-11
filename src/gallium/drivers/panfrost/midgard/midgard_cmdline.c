@@ -75,6 +75,9 @@ typedef struct midgard_instruction {
 	bool vector; 
 	alu_register_word registers;
 
+	/* I.e. (1 << alu_bit) */
+	int unit;
+
 	bool has_constants;
 	float constants[4];
 
@@ -156,11 +159,12 @@ alu_src_to_unsigned(midgard_vector_alu_src_t src)
 }
 
 static midgard_instruction
-m_alu_vector(midgard_alu_op_e op, unsigned src0, midgard_vector_alu_src_t mod1, unsigned src1, midgard_vector_alu_src_t mod2, unsigned dest, bool literal_out)
+m_alu_vector(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_src_t mod1, unsigned src1, midgard_vector_alu_src_t mod2, unsigned dest, bool literal_out)
 {
 	/* TODO: Use literal_out hint during register allocation */
 	midgard_instruction ins = {
 		.type = TAG_ALU_4,
+		.unit = unit,
 		.unused = false,
 		.uses_ssa = true,
 		.ssa_args = {
@@ -184,14 +188,14 @@ m_alu_vector(midgard_alu_op_e op, unsigned src0, midgard_vector_alu_src_t mod1, 
 	return ins;
 }
 
-#define M_ALU_VECTOR_1(name) \
+#define M_ALU_VECTOR_1(unit, name) \
 	static midgard_instruction m_##name(unsigned src, midgard_vector_alu_src_t mod1, unsigned dest, bool literal) { \
-		return m_alu_vector(midgard_alu_op_##name, -1, zero_alu_src, src, mod1, dest, literal); \
+		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, -1, zero_alu_src, src, mod1, dest, literal); \
 	}
 
-#define M_ALU_VECTOR_2(name) \
+#define M_ALU_VECTOR_2(unit, name) \
 	static midgard_instruction m_##name(unsigned src1, midgard_vector_alu_src_t mod1, unsigned src2, midgard_vector_alu_src_t mod2, unsigned dest, bool literal) { \
-		return m_alu_vector(midgard_alu_op_##name, src1, mod1, src2, mod2, dest, literal); \
+		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, src1, mod1, src2, mod2, dest, literal); \
 	}
 
 /* load/store instructions have both 32-bit and 16-bit variants, depending on
@@ -209,43 +213,43 @@ M_LOAD(load_uniform_32);
 //M_STORE(store_vary_16);
 M_STORE(store_vary_32);
 
-M_ALU_VECTOR_2(fadd);
-M_ALU_VECTOR_2(fmul);
-M_ALU_VECTOR_2(fmin);
-M_ALU_VECTOR_2(fmax);
-M_ALU_VECTOR_1(fmov);
-M_ALU_VECTOR_1(ffloor);
-M_ALU_VECTOR_1(fceil);
+M_ALU_VECTOR_2(MUL, fadd);
+M_ALU_VECTOR_2(MUL, fmul);
+M_ALU_VECTOR_2(MUL, fmin);
+M_ALU_VECTOR_2(MUL, fmax);
+M_ALU_VECTOR_1(MUL, fmov);
+M_ALU_VECTOR_1(MUL, ffloor);
+M_ALU_VECTOR_1(MUL, fceil);
 //M_ALU_VECTOR_2(fdot3);
 //M_ALU_VECTOR_2(fdot3r);
 //M_ALU_VECTOR_2(fdot4);
 //M_ALU_VECTOR_2(freduce);
-M_ALU_VECTOR_2(iadd);
-M_ALU_VECTOR_2(isub);
-M_ALU_VECTOR_2(imul);
-M_ALU_VECTOR_2(imov);
-M_ALU_VECTOR_2(feq);
-M_ALU_VECTOR_2(fne);
-M_ALU_VECTOR_2(flt);
+M_ALU_VECTOR_2(MUL, iadd);
+M_ALU_VECTOR_2(MUL, isub);
+M_ALU_VECTOR_2(MUL, imul);
+M_ALU_VECTOR_2(MUL, imov);
+M_ALU_VECTOR_2(MUL, feq);
+M_ALU_VECTOR_2(MUL, fne);
+M_ALU_VECTOR_2(MUL, flt);
 //M_ALU_VECTOR_2(fle);
-M_ALU_VECTOR_1(f2i);
-M_ALU_VECTOR_2(ieq);
-M_ALU_VECTOR_2(ine);
-M_ALU_VECTOR_2(ilt);
+M_ALU_VECTOR_1(MUL, f2i);
+M_ALU_VECTOR_2(MUL, ieq);
+M_ALU_VECTOR_2(MUL, ine);
+M_ALU_VECTOR_2(MUL, ilt);
 //M_ALU_VECTOR_2(ile);
 //M_ALU_VECTOR_2(csel);
-M_ALU_VECTOR_1(i2f);
+M_ALU_VECTOR_1(MUL, i2f);
 //M_ALU_VECTOR_2(fatan_pt2);
-M_ALU_VECTOR_1(frcp);
-M_ALU_VECTOR_1(frsqrt);
-M_ALU_VECTOR_1(fsqrt);
-M_ALU_VECTOR_1(fexp2);
-M_ALU_VECTOR_1(flog2);
-M_ALU_VECTOR_1(fsin);
-M_ALU_VECTOR_1(fcos);
+M_ALU_VECTOR_1(MUL, frcp);
+M_ALU_VECTOR_1(MUL, frsqrt);
+M_ALU_VECTOR_1(MUL, fsqrt);
+M_ALU_VECTOR_1(MUL, fexp2);
+M_ALU_VECTOR_1(MUL, flog2);
+M_ALU_VECTOR_1(MUL, fsin);
+M_ALU_VECTOR_1(MUL, fcos);
 //M_ALU_VECTOR_2(fatan_pt1);
 
-M_ALU_VECTOR_1(synthwrite);
+M_ALU_VECTOR_1(MUL, synthwrite);
 
 /* TODO: Expand into constituent parts since we do understand how this works,
  * no? */
@@ -604,30 +608,72 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 		case TAG_ALU_16: {
 			uint32_t control = tag;
 			size_t bytes_emitted = 0;
+
+			uint16_t register_words[8];
+			int register_words_count = 0;
+
+			uint64_t body_words[8];
+			size_t body_size[8];
+			int body_words_count = 0;
 			
 			/* TODO: Determine which units need to be enabled */
 
-			if (ins->vector) {
-				control |= ALU_ENAB_VEC_ADD;
+			int index = 0, last_unit = 0;
 
-				/* TODO */
-				EMIT_AND_COUNT(uint32_t, control);
-				EMIT_AND_COUNT(alu_register_word, ins->registers);
-				EMIT_AND_COUNT(midgard_vector_alu_t, ins->vector_alu);
+			while ((ins + index) &&
+				(ins + index)->type == TAG_ALU_4 &&
+			       	(ins + index)->unit > last_unit) {
 
-			} else if (ins->compact_branch) {
-				control |= ALU_ENAB_BR_COMPACT;
-				/* TODO: Actual structure */
-				EMIT_AND_COUNT(uint32_t, control);
-				EMIT_AND_COUNT(uint16_t, ins->br_compact);
-			} else {
-				control |= ALU_ENAB_SCAL_ADD;
+				midgard_instruction *ains = ins + index;
+
+				control |= ains->unit;
+				last_unit = ains->unit;
+
+				if (ins->vector) {
+					/* TODO */
+					memcpy(&register_words[register_words_count++], &ins->registers, sizeof(ins->registers));
+					bytes_emitted += sizeof(alu_register_word);
+
+					body_size[body_words_count] = sizeof(midgard_vector_alu_t);
+					memcpy(&body_words[body_words_count++], &ins->vector_alu, sizeof(ins->vector_alu));
+					bytes_emitted += sizeof(midgard_vector_alu_t);
+
+				} else if (ins->compact_branch) {
+					body_size[body_words_count] = sizeof(ins->br_compact);
+					memcpy(&body_words[body_words_count++], &ins->br_compact, sizeof(ins->br_compact));
+					bytes_emitted += sizeof(ins->br_compact);
+				} else {
+					/* TODO: Scalar ops */
+				}
+
+				++index;
 			}
+
+			/* Bubble up the number of instructions for skipping */
+			instructions_emitted = index;
+
+			//EMIT_AND_COUNT(alu_register_word, ins->registers);
+			//EMIT_AND_COUNT(midgard_vector_alu_t, ins->vector_alu);
+
+			/* Actually emit each component */
+
+			EMIT_AND_COUNT(uint32_t, control);
+
+			for (int i = 0; i < register_words_count; ++i)
+				util_dynarray_append(emission, uint16_t, register_words[i]);
+
+			for (int i = 0; i < body_words_count; ++i)
+				memcpy(util_dynarray_grow(emission, body_size[i]), &body_words[i], body_size[i]);
+
+			int padding = 0;
 
 			/* Pad ALU op to nearest word */
 
 			if (bytes_emitted & 15)
-				util_dynarray_grow(emission, 16 - (bytes_emitted & 15));
+				padding = 16 - (bytes_emitted & 15);
+
+			/* Emit padding */
+			util_dynarray_grow(emission, padding);
 
 			/* Tack on constants */
 
