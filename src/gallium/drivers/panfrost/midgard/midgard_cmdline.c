@@ -234,6 +234,8 @@ M_ALU_VECTOR_1(fsin);
 M_ALU_VECTOR_1(fcos);
 //M_ALU_VECTOR_2(fatan_pt1);
 
+M_ALU_VECTOR_1(synthwrite);
+
 static void
 attach_constants(midgard_instruction *ins, void *constants)
 {
@@ -270,7 +272,7 @@ optimise_nir(nir_shader *nir)
 		/* Midgard does not support I/O->I/O copies; lower these */
 		NIR_PASS(progress, nir, nir_lower_var_copies);
 
-		NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
+		//NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
 		NIR_PASS(progress, nir, nir_copy_prop);
 		NIR_PASS(progress, nir, nir_opt_remove_phis);
 		NIR_PASS(progress, nir, nir_opt_dce);
@@ -425,6 +427,35 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32(reg, offset));
 
 			break;
+
+		case nir_intrinsic_store_var: {
+			nir_variable *out = instr->variables[0]->var;
+			reg = instr->src[0].ssa->index;
+
+			printf("mode: %d\n", out->data.mode);
+			printf("location: %d\n", out->data.location);
+
+			if (out->data.mode == nir_var_shader_out) {
+				if (out->data.location == FRAG_RESULT_COLOR) {
+					/* gl_FragColor is not emitted with
+					 * load/store instructions. Instead, it
+					 * gets plonked into r0 at the end of
+					 * the shader and we do the framebuffer
+					 * writeout dance. Howeveer, we cannot
+					 * do that just yet */
+
+					midgard_instruction ins = m_synthwrite(reg, blank_alu_src, 0);
+					util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
+					break;
+				}
+			}
+
+			/* Worst case, emit a store varying and at least
+			 * that'll show up in the disassembly */
+
+			util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32(reg, offset));
+	      }
+
 
 		default:
 			printf ("Unhandled intrinsic\n");

@@ -80,6 +80,9 @@ typedef enum
 	midgard_alu_op_fsin       = 0xF6,
 	midgard_alu_op_fcos       = 0xF7,
 	midgard_alu_op_fatan_pt1  = 0xF9,
+
+	/* Not a real op, just used within the compiler to signal that a framebuffer write should be placed later */
+	midgard_alu_op_synthwrite = 0xFF,
 } midgard_alu_op_e;
 
 typedef enum
