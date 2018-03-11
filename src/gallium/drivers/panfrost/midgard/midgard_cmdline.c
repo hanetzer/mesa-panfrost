@@ -74,6 +74,8 @@ typedef struct midgard_instruction {
 	bool has_constants;
 	float constants[4];
 
+	bool compact_branch;
+
 	/* dynarray's are O(n) to delete from, which makes peephole
 	 * optimisations a little awkward. Instead, just have an unused flag
 	 * which the code gen will skip over */
@@ -84,6 +86,7 @@ typedef struct midgard_instruction {
 		midgard_load_store_word_t load_store;
 		midgard_scalar_alu_t scalar_alu;
 		midgard_vector_alu_t vector_alu;
+		uint16_t br_compact;
 		/* TODO Texture */
 	};
 } midgard_instruction;
@@ -235,6 +238,24 @@ M_ALU_VECTOR_1(fcos);
 //M_ALU_VECTOR_2(fatan_pt1);
 
 M_ALU_VECTOR_1(synthwrite);
+
+/* TODO: Expand into constituent parts since we do understand how this works,
+ * no? */
+
+static midgard_instruction
+m_alu_br_compact(uint16_t val)
+{
+	midgard_instruction ins = {
+		.type = TAG_ALU_4,
+		.unused = false,
+		.uses_ssa = false,
+
+		.compact_branch = true, 
+		.br_compact = val,
+	};
+
+	return ins;
+}
 
 static void
 attach_constants(midgard_instruction *ins, void *constants)
@@ -441,11 +462,18 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 					 * load/store instructions. Instead, it
 					 * gets plonked into r0 at the end of
 					 * the shader and we do the framebuffer
-					 * writeout dance. Howeveer, we cannot
-					 * do that just yet */
+					 * writeout dance. TODO: Defer writes */
 
-					midgard_instruction ins = m_synthwrite(reg, blank_alu_src, 0);
-					util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
+					{
+						midgard_instruction ins = m_fmov(reg, blank_alu_src, 0);
+						util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
+					}
+
+					{
+						midgard_instruction ins = m_alu_br_compact(0xF00F);
+						util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
+					}
+
 					break;
 				}
 			}
@@ -575,6 +603,11 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 				EMIT_AND_COUNT(alu_register_word, ins->registers);
 				EMIT_AND_COUNT(midgard_vector_alu_t, ins->vector_alu);
 
+			} else if (ins->compact_branch) {
+				control |= ALU_ENAB_BR_COMPACT;
+				/* TODO: Actual structure */
+				EMIT_AND_COUNT(uint32_t, control);
+				EMIT_AND_COUNT(uint16_t, ins->br_compact);
 			} else {
 				control |= ALU_ENAB_SCAL_ADD;
 			}

@@ -156,14 +156,13 @@ __attribute__((__packed__))
 
 /* ALU control words are single bit fields with a lot of space */
 
-#define ALU_ENAB_VEC_MUL  (1 << 17)
-#define ALU_ENAB_SCAL_ADD (1 << 19)
-#define ALU_ENAB_VEC_ADD  (1 << 21)
-#define ALU_ENAB_SCAL_MUL (1 << 23)
-#define ALU_ENAB_LUT      (1 << 25)
-#define ALU_ENAB_MUL_2    (1 << 25)
-#define ALU_ENAB_WRITE    (1 << 26)
-#define ALU_ENAB_BRANCH   (1 << 27)
+#define ALU_ENAB_VEC_MUL    (1 << 17)
+#define ALU_ENAB_SCAL_ADD   (1 << 19)
+#define ALU_ENAB_VEC_ADD    (1 << 21)
+#define ALU_ENAB_SCAL_MUL   (1 << 23)
+#define ALU_ENAB_LUT        (1 << 25)
+#define ALU_ENAB_BR_COMPACT (1 << 26)
+#define ALU_ENAB_BRANCH     (1 << 27)
 
 /* ALU register fields are weird because of inline constants */
 
