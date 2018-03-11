@@ -94,6 +94,10 @@ typedef struct midgard_instruction {
 /* Helpers to generate midgard_instruction's using macro magic, since every
  * driver seems to do it that way */
 
+#define EMIT(op, ...) util_dynarray_append(&ctx->current_block, \
+					   midgard_instruction, \
+					   m_##op(__VA_ARGS__));
+
 #define M_LOAD_STORE(name, rname, uname) \
 	static midgard_instruction m_##name(unsigned ssa, unsigned address) { \
 		midgard_instruction i = { \
@@ -464,15 +468,8 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 					 * the shader and we do the framebuffer
 					 * writeout dance. TODO: Defer writes */
 
-					{
-						midgard_instruction ins = m_fmov(reg, blank_alu_src, 0);
-						util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
-					}
-
-					{
-						midgard_instruction ins = m_alu_br_compact(0xF00F);
-						util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
-					}
+					EMIT(fmov, reg, blank_alu_src, 0);
+					EMIT(alu_br_compact, 0xF00F);
 
 					break;
 				}
