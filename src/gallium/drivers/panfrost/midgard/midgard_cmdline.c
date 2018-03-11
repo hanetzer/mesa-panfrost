@@ -267,6 +267,7 @@ optimise_nir(nir_shader *nir)
 		progress = false;
 
 		NIR_PASS(progress, nir, nir_lower_vars_to_ssa);
+		NIR_PASS(progress, nir, nir_lower_vec_to_movs);
 
 		/* Midgard does not support I/O->I/O copies; lower these */
 		NIR_PASS(progress, nir, nir_lower_var_copies);
