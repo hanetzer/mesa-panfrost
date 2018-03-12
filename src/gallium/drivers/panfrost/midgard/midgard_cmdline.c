@@ -203,7 +203,7 @@ m_alu_vector(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_sr
  * don't support half-floats -- this requires changes in other parts of the
  * compiler -- therefore the 16-bit versions are commented out. */
 
-M_LOAD(ld_st_noop);
+//M_LOAD(ld_st_noop);
 //M_LOAD(load_attr_16);
 M_LOAD(load_attr_32);
 //M_LOAD(load_vary_16);
@@ -492,7 +492,7 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			/* Worst case, emit a store varying and at least
 			 * that'll show up in the disassembly */
 
-			util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32(reg, offset));
+			util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32(reg, 0));
 	      }
 
 
@@ -554,12 +554,11 @@ allocate_registers(compiler_context *ctx)
 	}
 }
 
-
 /* Midgard prefetches instruction types, so during emission we need to
  * lookahead too. Unless this is the last instruction, in which we return 1. Or
  * if this is the second to last and the last is an ALU, then it's also 1... */
 
-#define IN_ARRAY(n, arr) (n < (arr.data + arr.size))
+#define IN_ARRAY(n, arr) ((uintptr_t) n < (uintptr_t) (arr.data + arr.size))
 #define IS_ALU(tag) (tag == TAG_ALU_4 || tag == TAG_ALU_8 ||  \
 		     tag == TAG_ALU_12 || tag == TAG_ALU_16)
 
