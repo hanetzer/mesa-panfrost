@@ -478,9 +478,6 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			nir_variable *out = instr->variables[0]->var;
 			reg = instr->src[0].ssa->index;
 
-			printf("mode: %d\n", out->data.mode);
-			printf("location: %d\n", out->data.location);
-
 			if (out->data.mode == nir_var_shader_out) {
 				if (out->data.location == FRAG_RESULT_COLOR) {
 					/* gl_FragColor is not emitted with
@@ -489,7 +486,6 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 					 * the shader and we do the framebuffer
 					 * writeout dance. TODO: Defer writes */
 
-					printf("%p\n", &ctx->current_block);
 					EMIT(fmov, reg, blank_alu_src, 0, true);
 					break;
 				}
@@ -595,7 +591,6 @@ static int
 emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct util_dynarray *emission)
 {
 	int instructions_emitted = 0;
-	printf("Emit\n");
 
 	uint8_t lookahead_tag = get_lookahead_type(ctx->current_block, ins);
 	uint8_t tag = ins->type | (lookahead_tag << 4);
@@ -619,22 +614,16 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 
 			int index = 0, last_unit = 0;
 
-			printf("u: %d\n", ins->unit);
-			printf("t: %d\n", ins->type);
-
 			while ((ins + index) &&
 				(ins + index)->type == TAG_ALU_4 &&
 			       	(ins + index)->unit > last_unit) {
 
-				printf("...");
 				midgard_instruction *ains = ins + index;
 
 				control |= ains->unit;
 				last_unit = ains->unit;
 
 				if (ins->vector) {
-					printf("Vector\n");
-
 					memcpy(&register_words[register_words_count++], &ins->registers, sizeof(ins->registers));
 					bytes_emitted += sizeof(alu_register_word);
 
@@ -643,7 +632,6 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					bytes_emitted += sizeof(midgard_vector_alu_t);
 
 				} else if (ins->compact_branch) {
-					printf("Compact\n");
 					body_size[body_words_count] = sizeof(ins->br_compact);
 					memcpy(&body_words[body_words_count++], &ins->br_compact, sizeof(ins->br_compact));
 					bytes_emitted += sizeof(ins->br_compact);
@@ -664,7 +652,6 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 			/* Pad ALU op to nearest word */
 
 			if (bytes_emitted & 15) {
-				printf("Bytes %d\n", bytes_emitted);
 				padding = 16 - (bytes_emitted & 15);
 				bytes_emitted += padding;
 			}
@@ -761,7 +748,6 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 			break;
 	}
 
-	printf("emitted %d\n", instructions_emitted);
 	return instructions_emitted;
 }
 
@@ -894,12 +880,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 	util_dynarray_init(compiled, NULL);
 
-			util_dynarray_foreach(&ctx->current_block, midgard_instruction, ins) {
-				printf("instructions\n");
-			}
-
 	util_dynarray_foreach(&ctx->current_block, midgard_instruction, ins) {
-		printf("EMM\n");
 		if (!ins->unused)
 			ins += emit_binary_instruction(ctx, ins, compiled);
 	}
