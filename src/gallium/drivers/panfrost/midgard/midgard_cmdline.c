@@ -496,7 +496,16 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			/* Worst case, emit a load varying and at least
 			 * that'll show up in the disassembly */
 
-			util_dynarray_append(&ctx->current_block, midgard_instruction, m_load_vary_32(reg, 0));
+			/* XXX: Only when we're supposed to emit a varying */
+			/* XXX: Which location? */
+			/* XXX: Half-floats? */
+			/* TODO: swizzle, mask, decode unknown */
+
+			midgard_instruction ins = m_load_vary_32(reg, 0);
+			ins.load_store.unknown = 0xA01E9E; /* XXX: What is this? */
+			util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
+
+			//util_dynarray_append(&ctx->current_block, midgard_instruction, m_load_vary_32(reg, 0));
 			break;
 	      }
 
