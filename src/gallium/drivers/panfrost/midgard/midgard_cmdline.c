@@ -610,8 +610,7 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 			size_t body_size[8];
 			int body_words_count = 0;
 			
-			/* TODO: Determine which units need to be enabled */
-
+			/* TODO: Constant combining */
 			int index = 0, last_unit = 0;
 
 			while ((ins + index) &&
@@ -623,25 +622,24 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 				control |= ains->unit;
 				last_unit = ains->unit;
 
-				if (ins->vector) {
-					memcpy(&register_words[register_words_count++], &ins->registers, sizeof(ins->registers));
+				if (ains->vector) {
+					memcpy(&register_words[register_words_count++], &ains->registers, sizeof(ains->registers));
 					bytes_emitted += sizeof(alu_register_word);
 
 					body_size[body_words_count] = sizeof(midgard_vector_alu_t);
-					memcpy(&body_words[body_words_count++], &ins->vector_alu, sizeof(ins->vector_alu));
+					memcpy(&body_words[body_words_count++], &ains->vector_alu, sizeof(ains->vector_alu));
 					bytes_emitted += sizeof(midgard_vector_alu_t);
 
-				} else if (ins->compact_branch) {
-					body_size[body_words_count] = sizeof(ins->br_compact);
-					memcpy(&body_words[body_words_count++], &ins->br_compact, sizeof(ins->br_compact));
-					bytes_emitted += sizeof(ins->br_compact);
+				} else if (ains->compact_branch) {
+					body_size[body_words_count] = sizeof(ains->br_compact);
+					memcpy(&body_words[body_words_count++], &ains->br_compact, sizeof(ains->br_compact));
+					bytes_emitted += sizeof(ains->br_compact);
 				} else {
 					/* TODO: Scalar ops */
 					printf("Scalar the huh?\n");
 				}
 
 				++index;
-				break;
 			}
 
 			/* Bubble up the number of instructions for skipping */
