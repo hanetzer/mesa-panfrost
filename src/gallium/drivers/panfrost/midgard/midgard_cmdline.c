@@ -864,6 +864,18 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 	util_dynarray_init(compiled, NULL);
 	util_dynarray_init(&tags, NULL);
 
+	/* XXX: Workaround hardware errata where shaders must start with a load/store instruction */
+	if (unlikely(*((uint8_t *) ctx->current_block.data) != TAG_LOAD_STORE_4)) {
+		midgard_load_store_t instruction = {
+			.tag = TAG_LOAD_STORE_4,
+			.word1 = 3,
+			.word2 = 3
+		};
+
+		util_dynarray_append(&tags, int, compiled->size);
+		util_dynarray_append(compiled, midgard_load_store_t, instruction);
+	}
+
 	/* Emit flat binary from the instruction array. Save instruction boundaries such that lookahead tags can be assigned easily */
 	util_dynarray_foreach(&ctx->current_block, midgard_instruction, ins) {
 		if (!ins->unused) {
