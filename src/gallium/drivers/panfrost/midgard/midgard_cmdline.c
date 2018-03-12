@@ -561,24 +561,9 @@ allocate_registers(compiler_context *ctx)
  * lookahead too. Unless this is the last instruction, in which we return 1. Or
  * if this is the second to last and the last is an ALU, then it's also 1... */
 
-#define IN_ARRAY(n, arr) ((void*)n < (void*)(arr.data + arr.size))
+#define IN_ARRAY(n, arr) (n < (arr.data + arr.size))
 #define IS_ALU(tag) (tag == TAG_ALU_4 || tag == TAG_ALU_8 ||  \
 		     tag == TAG_ALU_12 || tag == TAG_ALU_16)
-
-static int
-get_lookahead_type(struct util_dynarray block, midgard_instruction *ins)
-{
-	midgard_instruction *n = ins + 1;
-
-	if (IN_ARRAY(n, block)) {
-		if (!IN_ARRAY(n + 1, block) && IS_ALU(n->type))
-			return 1;
-
-		return n->type;
-	}
-
-	return 1;
-}
 
 #define EMIT_AND_COUNT(type, val) util_dynarray_append(emission, type, val); \
 				  bytes_emitted += sizeof(type)
@@ -592,15 +577,14 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 {
 	int instructions_emitted = 0;
 
-	uint8_t lookahead_tag = get_lookahead_type(ctx->current_block, ins);
-	uint8_t tag = ins->type | (lookahead_tag << 4);
+	uint8_t tag = ins->type;
 
 	switch(ins->type) {
 		case TAG_ALU_4:
 		case TAG_ALU_8:
 		case TAG_ALU_12:
 		case TAG_ALU_16: {
-			uint32_t control = get_lookahead_type(ctx->current_block, ins) << 4;
+			uint32_t control = 0;
 			size_t bytes_emitted = sizeof(control);
 
 			uint16_t register_words[8];
@@ -704,7 +688,7 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 
 			bool filled_next = false;
 
-			if (lookahead_tag == TAG_LOAD_STORE_4) {
+			if ((ins + 1)->type == TAG_LOAD_STORE_4) {
 				midgard_load_store_word_t next = (ins + 1)->load_store;
 
 				/* As the two operate concurrently (TODO:
@@ -876,11 +860,38 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 		break; /* TODO: Multi-function shaders */
 	}
 
-	util_dynarray_init(compiled, NULL);
+	struct util_dynarray tags;
 
+	util_dynarray_init(compiled, NULL);
+	util_dynarray_init(&tags, NULL);
+
+	/* Emit flat binary from the instruction array. Save instruction boundaries such that lookahead tags can be assigned easily */
 	util_dynarray_foreach(&ctx->current_block, midgard_instruction, ins) {
-		if (!ins->unused)
+		if (!ins->unused) {
+			util_dynarray_append(&tags, int, compiled->size);
 			ins += emit_binary_instruction(ctx, ins, compiled);
+		}
+	}
+
+	/* Now just perform lookahead */
+	util_dynarray_foreach(&tags, int, tag) {
+		int lookahead;
+
+		uint8_t *ins = ((uint8_t *) compiled->data) + *tag;
+
+		if (IN_ARRAY(tag + 1, tags)) {
+			uint8_t *next = ((uint8_t *) compiled->data) + *(tag + 1);
+
+			if (!IN_ARRAY(tag + 2, tags) && IS_ALU(*next)) {
+				lookahead = 1;
+			} else {
+				lookahead = *next;
+			}
+		} else {
+			lookahead = 1;
+		}
+
+		*ins |= lookahead << 4;
 	}
 
 	util_dynarray_fini(&ctx->current_block);
