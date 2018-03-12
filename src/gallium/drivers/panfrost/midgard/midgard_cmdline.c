@@ -841,18 +841,17 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 			/* Artefact of load_const in the average case */
 			eliminate_constant_mov(ctx);
 
-			/* Finally, register allocation! Must be done after everything else */
-			allocate_registers(ctx);
-
 			/* Append fragment shader epilogue (value writeout) */
 			EMIT(alu_br_compact_cond, midgard_jmp_writeout_op_writeout, TAG_ALU_4, 0, COND_FBWRITE);
 
-			/* Errata workaround -- the above write
-			 * can sometimes fail -.- */
+			/* Errata workaround -- the above write can sometimes
+			 * fail -.- */
 
 			EMIT(fmov, 0, blank_alu_src, 0, true);
 			EMIT(alu_br_compact_cond, midgard_jmp_writeout_op_writeout, TAG_ALU_4, -1, COND_FBWRITE);
 
+			/* Finally, register allocation! Must be done after everything else */
+			allocate_registers(ctx);
 
 			break; /* TODO: Multi-block shaders */
 		}
