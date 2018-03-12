@@ -472,6 +472,34 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 
 			break;
 
+		case nir_intrinsic_load_var: {
+			nir_variable *out = instr->variables[0]->var;
+			reg = instr->dest.ssa.index;
+
+			if (out->data.mode == nir_var_uniform) {
+				int slot = out->data.location;
+
+				/* TODO: half-floats */
+				/* TODO: Wrong order, plus how do we know how many? */
+				/* TODO: Spill to ld_uniform */
+
+				int reg_slot = 23 - slot;
+				
+				/* Uniform accesses are 0-cycle, but that's
+				 * abstract, so we emit a fmov that will get
+				 * inlined */
+				EMIT(fmov, reg_slot, blank_alu_src, reg, false);
+
+				break;
+			}
+
+			/* Worst case, emit a load varying and at least
+			 * that'll show up in the disassembly */
+
+			util_dynarray_append(&ctx->current_block, midgard_instruction, m_load_vary_32(reg, 0));
+			break;
+	      }
+
 		case nir_intrinsic_store_var: {
 			nir_variable *out = instr->variables[0]->var;
 			reg = instr->src[0].ssa->index;
@@ -558,7 +586,7 @@ allocate_registers(compiler_context *ctx)
  * lookahead too. Unless this is the last instruction, in which we return 1. Or
  * if this is the second to last and the last is an ALU, then it's also 1... */
 
-#define IN_ARRAY(n, arr) ((uintptr_t) n < (uintptr_t) (arr.data + arr.size))
+#define IN_ARRAY(n, arr) (n < (arr.data + arr.size))
 #define IS_ALU(tag) (tag == TAG_ALU_4 || tag == TAG_ALU_8 ||  \
 		     tag == TAG_ALU_12 || tag == TAG_ALU_16)
 
@@ -835,7 +863,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 			inline_alu_constants(ctx);
 
-			/* Artefact of load_const in the average case */
+			/* Artefact of load_const, etc in the average case */
 			eliminate_constant_mov(ctx);
 
 			/* Append fragment shader epilogue (value writeout) */
