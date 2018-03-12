@@ -249,8 +249,6 @@ M_ALU_VECTOR_1(MUL, fsin);
 M_ALU_VECTOR_1(MUL, fcos);
 //M_ALU_VECTOR_2(fatan_pt1);
 
-M_ALU_VECTOR_1(MUL, synthwrite);
-
 /* TODO: Expand into constituent parts since we do understand how this works,
  * no? */
 
