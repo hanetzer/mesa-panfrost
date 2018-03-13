@@ -305,16 +305,22 @@ optimise_nir(nir_shader *nir)
 {
 	bool progress;
 
+	NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
+
+	//NIR_PASS_V(nir, nir_lower_io_to_temporaries, nir_shader_get_entrypoint(nir), true, true);
+	//NIR_PASS(progress, nir, nir_opt_global_to_local);
+	//NIR_PASS(progress, nir, nir_lower_regs_to_ssa);
+
+	//NIR_PASS(progress, nir, nir_lower_global_vars_to_local);
+	NIR_PASS(progress, nir, nir_lower_var_copies);
+	//NIR_PASS(progress, nir, nir_lower_locals_to_regs);
+	NIR_PASS_V(nir, nir_lower_io_types);
+
 	do {
 		progress = false;
 
 		NIR_PASS(progress, nir, nir_lower_vars_to_ssa);
 		NIR_PASS(progress, nir, nir_lower_vec_to_movs);
-
-		/* Midgard does not support I/O->I/O copies; lower these */
-		NIR_PASS(progress, nir, nir_lower_var_copies);
-
-		//NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
 		NIR_PASS(progress, nir, nir_copy_prop);
 		NIR_PASS(progress, nir, nir_opt_remove_phis);
 		NIR_PASS(progress, nir, nir_opt_dce);
@@ -323,7 +329,7 @@ optimise_nir(nir_shader *nir)
 		NIR_PASS(progress, nir, nir_opt_peephole_select, 8);
 		NIR_PASS(progress, nir, nir_opt_algebraic);
 		NIR_PASS(progress, nir, nir_opt_constant_folding);
-		NIR_PASS(progress, nir, nir_opt_undef);
+		//NIR_PASS(progress, nir, nir_opt_undef);
 		NIR_PASS(progress, nir, nir_opt_loop_unroll, 
 				nir_var_shader_in |
 				nir_var_shader_out |
@@ -450,12 +456,37 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 
 			reg = instr->dest.ssa.index;
 
-			util_dynarray_append(&ctx->current_block, midgard_instruction, 
-				instr->intrinsic == nir_intrinsic_load_uniform ? 
-					m_load_uniform_32(reg, offset) :
-				ctx->stage == MESA_SHADER_FRAGMENT ?
-					m_load_vary_32(reg, offset) :
-					m_load_attr_32(reg, offset));
+			/* What this means depends on the type of instruction */
+			/* TODO: Pack? */
+
+			if (instr->intrinsic == nir_intrinsic_load_uniform) {
+				/* TODO: half-floats */
+				/* TODO: Wrong order, plus how do we know how many? */
+				/* TODO: Spill to ld_uniform */
+
+				int reg_slot = 23 - offset;
+				
+				/* Uniform accesses are 0-cycle, but that's
+				 * abstract, so we emit a fmov that will get
+				 * inlined */
+				EMIT(fmov, reg_slot, blank_alu_src, reg, false);
+
+				break;
+			} else if (ctx->stage == MESA_SHADER_FRAGMENT) {
+				/* XXX: Half-floats? */
+				/* TODO: swizzle, mask, decode unknown */
+
+				midgard_instruction ins = m_load_vary_32(reg, offset);
+				ins.load_store.unknown = 0xA01E9E; /* XXX: What is this? */
+				util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
+
+				break;
+			}
+
+			/* Worst case, emit a load varying and at least
+			 * that'll show up in the disassembly */
+
+			util_dynarray_append(&ctx->current_block, midgard_instruction, m_load_vary_32(reg, 0));
 
 			break;
 
@@ -468,72 +499,21 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 
 			reg = instr->src[0].ssa->index;
 
+			if (ctx->stage == MESA_SHADER_FRAGMENT) {
+				/* gl_FragColor is not emitted with load/store
+				 * instructions. Instead, it gets plonked into
+				 * r0 at the end of the shader and we do the
+				 * framebuffer writeout dance. TODO: Defer
+				 * writes */
+
+				EMIT(fmov, reg, blank_alu_src, 0, true);
+				break;
+			}
+
+
 			util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32(reg, offset));
 
 			break;
-
-		case nir_intrinsic_load_var: {
-			nir_variable *out = instr->variables[0]->var;
-			reg = instr->dest.ssa.index;
-
-			/* What this means depends on the type of instruction */
-			/* TODO: Pack? */
-
-			int slot = out->data.location;
-
-			if (out->data.mode == nir_var_uniform) {
-				/* TODO: half-floats */
-				/* TODO: Wrong order, plus how do we know how many? */
-				/* TODO: Spill to ld_uniform */
-
-				int reg_slot = 23 - slot;
-				
-				/* Uniform accesses are 0-cycle, but that's
-				 * abstract, so we emit a fmov that will get
-				 * inlined */
-				EMIT(fmov, reg_slot, blank_alu_src, reg, false);
-
-				break;
-			} else if (out->data_mode == nir_var_shader_in && ctx->stage == MESA_SHADER_FRAGMENT) {
-				/* XXX: Half-floats? */
-				/* TODO: swizzle, mask, decode unknown */
-
-				midgard_instruction ins = m_load_vary_32(reg, slot);
-				ins.load_store.unknown = 0xA01E9E; /* XXX: What is this? */
-				util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
-
-				break;
-			}
-
-			/* Worst case, emit a load varying and at least
-			 * that'll show up in the disassembly */
-
-			util_dynarray_append(&ctx->current_block, midgard_instruction, m_load_vary_32(reg, 0));
-			break;
-	      }
-
-		case nir_intrinsic_store_var: {
-			nir_variable *out = instr->variables[0]->var;
-			reg = instr->src[0].ssa->index;
-
-			if (out->data.mode == nir_var_shader_out) {
-				if (out->data.location == FRAG_RESULT_COLOR) {
-					/* gl_FragColor is not emitted with
-					 * load/store instructions. Instead, it
-					 * gets plonked into r0 at the end of
-					 * the shader and we do the framebuffer
-					 * writeout dance. TODO: Defer writes */
-
-					EMIT(fmov, reg, blank_alu_src, 0, true);
-					break;
-				}
-			}
-
-			/* Worst case, emit a store varying and at least
-			 * that'll show up in the disassembly */
-
-			util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32(reg, 0));
-	      }
 
 
 		default:
@@ -858,6 +838,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 	compiler_context *ctx = &ictx;
 
+	nir_print_shader(nir, stdout);
 	optimise_nir(nir);
 	nir_print_shader(nir, stdout);
 
@@ -989,12 +970,12 @@ int main(int argc, char **argv)
 		.do_link = true,
 	};
 
-	if (argc != 2) {
+	if (argc != 3) {
 		printf("Must pass exactly two GLSL files\n");
 		exit(1);
 	}
 
-	prog = standalone_compile_shader(&options, 1, &argv[1]);
+	prog = standalone_compile_shader(&options, 2, &argv[1]);
 	prog->_LinkedShaders[MESA_SHADER_FRAGMENT]->Program->info.stage = MESA_SHADER_FRAGMENT;
 
 	struct util_dynarray compiled;
