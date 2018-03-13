@@ -101,7 +101,7 @@ typedef struct midgard_instruction {
 /* Helpers to generate midgard_instruction's using macro magic, since every
  * driver seems to do it that way */
 
-#define EMIT(op, ...) util_dynarray_append(&(ctx->current_block), midgard_instruction, m_##op(__VA_ARGS__));
+#define EMIT(op, ...) util_dynarray_append(&(ctx->current_block), midgard_instruction, v_##op(__VA_ARGS__));
 
 #define M_LOAD_STORE(name, rname, uname) \
 	static midgard_instruction m_##name(unsigned ssa, unsigned address) { \
@@ -151,7 +151,15 @@ n2m_alu_modifiers(nir_alu_src *src)
 }
 
 static unsigned
-alu_src_to_unsigned(midgard_vector_alu_src_t src)
+vector_alu_src_to_unsigned(midgard_vector_alu_src_t src)
+{
+	unsigned u;
+	memcpy(&u, &src, sizeof(src));
+	return u;
+}
+
+static unsigned
+scalar_alu_src_to_unsigned(midgard_scalar_alu_src_t src)
 {
 	unsigned u;
 	memcpy(&u, &src, sizeof(src));
@@ -180,8 +188,38 @@ m_alu_vector(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_sr
 			.dest_override = midgard_dest_override_none,
 			.outmod = midgard_outmod_none,
 			.mask = 0xFF,
-			.src1 = alu_src_to_unsigned(mod1),
-			.src2 = alu_src_to_unsigned(mod2)
+			.src1 = vector_alu_src_to_unsigned(mod1),
+			.src2 = vector_alu_src_to_unsigned(mod2)
+		},
+	};
+
+	return ins;
+}
+
+static midgard_instruction
+m_alu_scalar(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_src_t mod1, unsigned src1, midgard_vector_alu_src_t mod2, unsigned dest, int output_component)
+{
+	/* TODO: Use literal_out hint during register allocation */
+	midgard_instruction ins = {
+		.type = TAG_ALU_4,
+		.unit = unit,
+		.unused = false,
+		.uses_ssa = true,
+		.ssa_args = {
+			.src0 = src0,
+			.src1 = src1,
+			.dest = dest,
+			.literal_out = literal_out
+		},
+		.vector = false,
+		.scalar_alu = {
+			.op = op,
+			.src1 = scalar_alu_src_to_unsigned(mod1),
+			.src2 = scalar_alu_src_to_unsigned(mod2),
+			.unknown = 0, /* XXX */
+			.outmod = midgard_outmod_none,
+			.output_full = true, /* XXX */
+			.output_component = output_component
 		},
 	};
 
@@ -189,13 +227,23 @@ m_alu_vector(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_sr
 }
 
 #define M_ALU_VECTOR_1(unit, name) \
-	static midgard_instruction m_##name(unsigned src, midgard_vector_alu_src_t mod1, unsigned dest, bool literal) { \
+	static midgard_instruction v_##name(unsigned src, midgard_vector_alu_src_t mod1, unsigned dest, bool literal) { \
 		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, -1, zero_alu_src, src, mod1, dest, literal); \
 	}
 
 #define M_ALU_VECTOR_2(unit, name) \
-	static midgard_instruction m_##name(unsigned src1, midgard_vector_alu_src_t mod1, unsigned src2, midgard_vector_alu_src_t mod2, unsigned dest, bool literal) { \
+	static midgard_instruction v_##name(unsigned src1, midgard_vector_alu_src_t mod1, unsigned src2, midgard_vector_alu_src_t mod2, unsigned dest, bool literal) { \
 		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, src1, mod1, src2, mod2, dest, literal); \
+	}
+
+#define M_ALU_SCALAR_1(unit, name) \
+	static midgard_instruction s_##name(unsigned src, midgard_vector_alu_src_t mod1, unsigned dest, int oc) { \
+		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, -1, zero_alu_src, src, mod1, dest, oc); \
+	}
+
+#define M_ALU_SCALAR_2(unit, name) \
+	static midgard_instruction s_##name(unsigned src1, midgard_vector_alu_src_t mod1, unsigned src2, midgard_vector_alu_src_t mod2, unsigned dest, int oc) { \
+		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, src1, mod1, src2, mod2, dest, oc); \
 	}
 
 /* load/store instructions have both 32-bit and 16-bit variants, depending on
@@ -248,6 +296,8 @@ M_ALU_VECTOR_1(MUL, flog2);
 M_ALU_VECTOR_1(MUL, fsin);
 M_ALU_VECTOR_1(MUL, fcos);
 //M_ALU_VECTOR_2(fatan_pt1);
+
+M_ALU_SCALAR_1(MUL, fmov);
 
 /* TODO: Expand into constituent parts since we do understand how this works,
  * no? */
@@ -346,14 +396,14 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 	memcpy(v, &instr->value.f32, 4 * sizeof(float));
 	_mesa_hash_table_u64_insert(ctx->ssa_constants, def.index, v);
 
-	midgard_instruction ins = m_fmov(REGISTER_CONSTANT, blank_alu_src, def.index, false);
+	midgard_instruction ins = v_fmov(REGISTER_CONSTANT, blank_alu_src, def.index, false);
 	attach_constants(&ins, &instr->value.f32);
 	util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 }
 
 #define EMIT_ALU_CASE_1(op_nir, op_midgard) \
 	case nir_op_##op_nir: \
-		ins = m_##op_midgard( \
+		ins = v_##op_midgard( \
 			instr->src[0].src.ssa->index, \
 			n2m_alu_modifiers(&instr->src[0]), \
 			instr->dest.dest.ssa.index, \
@@ -363,7 +413,7 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 
 #define EMIT_ALU_CASE_2(op_nir, op_midgard) \
 	case nir_op_##op_nir: \
-		ins = m_##op_midgard( \
+		ins = v_##op_midgard( \
 			instr->src[0].src.ssa->index, \
 			n2m_alu_modifiers(&instr->src[0]), \
 			instr->src[1].src.ssa->index, \
