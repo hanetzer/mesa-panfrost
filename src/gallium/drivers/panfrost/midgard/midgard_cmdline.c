@@ -305,22 +305,22 @@ optimise_nir(nir_shader *nir)
 {
 	bool progress;
 
-	NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
 
 	//NIR_PASS_V(nir, nir_lower_io_to_temporaries, nir_shader_get_entrypoint(nir), true, true);
 	//NIR_PASS(progress, nir, nir_opt_global_to_local);
 	//NIR_PASS(progress, nir, nir_lower_regs_to_ssa);
 
 	//NIR_PASS(progress, nir, nir_lower_global_vars_to_local);
-	NIR_PASS(progress, nir, nir_lower_var_copies);
 	//NIR_PASS(progress, nir, nir_lower_locals_to_regs);
-	NIR_PASS_V(nir, nir_lower_io_types);
+	//NIR_PASS_V(nir, nir_lower_io_types);
 
 	do {
 		progress = false;
 
+		NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
+		NIR_PASS(progress, nir, nir_lower_var_copies);
+
 		NIR_PASS(progress, nir, nir_lower_vars_to_ssa);
-		NIR_PASS(progress, nir, nir_lower_vec_to_movs);
 		NIR_PASS(progress, nir, nir_copy_prop);
 		NIR_PASS(progress, nir, nir_opt_remove_phis);
 		NIR_PASS(progress, nir, nir_opt_dce);
