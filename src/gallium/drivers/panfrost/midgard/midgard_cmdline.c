@@ -197,9 +197,8 @@ m_alu_vector(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_sr
 }
 
 static midgard_instruction
-m_alu_scalar(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_src_t mod1, unsigned src1, midgard_vector_alu_src_t mod2, unsigned dest, int output_component)
+m_alu_scalar(midgard_alu_op_e op, int unit, unsigned src0, midgard_scalar_alu_src_t mod1, unsigned src1, midgard_scalar_alu_src_t mod2, unsigned dest, int output_component)
 {
-	/* TODO: Use literal_out hint during register allocation */
 	midgard_instruction ins = {
 		.type = TAG_ALU_4,
 		.unit = unit,
@@ -209,7 +208,6 @@ m_alu_scalar(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_sr
 			.src0 = src0,
 			.src1 = src1,
 			.dest = dest,
-			.literal_out = literal_out
 		},
 		.vector = false,
 		.scalar_alu = {
@@ -303,7 +301,7 @@ M_ALU_SCALAR_1(MUL, fmov);
  * no? */
 
 static midgard_instruction
-m_alu_br_compact_cond(midgard_jmp_writeout_op_e op, unsigned tag, signed offset, unsigned cond)
+v_alu_br_compact_cond(midgard_jmp_writeout_op_e op, unsigned tag, signed offset, unsigned cond)
 {
 	midgard_branch_cond_t branch = {
 		.op = op,
