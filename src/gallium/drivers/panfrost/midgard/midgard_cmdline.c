@@ -150,6 +150,12 @@ n2m_alu_modifiers(nir_alu_src *src)
 	return alu_src;
 }
 
+static midgard_outmod_e
+n2m_alu_outmod(bool saturate)
+{
+	return saturate ? midgard_outmod_sat : midgard_outmod_none;
+}
+
 static unsigned
 vector_alu_src_to_unsigned(midgard_vector_alu_src_t src)
 {
@@ -167,7 +173,7 @@ scalar_alu_src_to_unsigned(midgard_scalar_alu_src_t src)
 }
 
 static midgard_instruction
-m_alu_vector(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_src_t mod1, unsigned src1, midgard_vector_alu_src_t mod2, unsigned dest, bool literal_out)
+m_alu_vector(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_src_t mod1, unsigned src1, midgard_vector_alu_src_t mod2, unsigned dest, bool literal_out, midgard_outmod_e outmod)
 {
 	/* TODO: Use literal_out hint during register allocation */
 	midgard_instruction ins = {
@@ -186,7 +192,7 @@ m_alu_vector(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_sr
 			.op = op,
 			.reg_mode = midgard_reg_mode_full,
 			.dest_override = midgard_dest_override_none,
-			.outmod = midgard_outmod_none,
+			.outmod = outmod,
 			.mask = 0xFF,
 			.src1 = vector_alu_src_to_unsigned(mod1),
 			.src2 = vector_alu_src_to_unsigned(mod2)
@@ -197,7 +203,7 @@ m_alu_vector(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_sr
 }
 
 static midgard_instruction
-m_alu_scalar(midgard_alu_op_e op, int unit, unsigned src0, midgard_scalar_alu_src_t mod1, unsigned src1, midgard_scalar_alu_src_t mod2, unsigned dest, int output_component)
+m_alu_scalar(midgard_alu_op_e op, int unit, unsigned src0, midgard_scalar_alu_src_t mod1, unsigned src1, midgard_scalar_alu_src_t mod2, unsigned dest, int output_component, midgard_outmod_e outmod)
 {
 	midgard_instruction ins = {
 		.type = TAG_ALU_4,
@@ -215,7 +221,7 @@ m_alu_scalar(midgard_alu_op_e op, int unit, unsigned src0, midgard_scalar_alu_sr
 			.src1 = scalar_alu_src_to_unsigned(mod1),
 			.src2 = scalar_alu_src_to_unsigned(mod2),
 			.unknown = 0, /* XXX */
-			.outmod = midgard_outmod_none,
+			.outmod = outmod,
 			.output_full = true, /* XXX */
 			.output_component = output_component
 		},
@@ -225,23 +231,23 @@ m_alu_scalar(midgard_alu_op_e op, int unit, unsigned src0, midgard_scalar_alu_sr
 }
 
 #define M_ALU_VECTOR_1(unit, name) \
-	static midgard_instruction v_##name(unsigned src, midgard_vector_alu_src_t mod1, unsigned dest, bool literal) { \
-		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, -1, zero_alu_src, src, mod1, dest, literal); \
+	static midgard_instruction v_##name(unsigned src, midgard_vector_alu_src_t mod1, unsigned dest, bool literal, midgard_outmod_e outmod) { \
+		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, -1, zero_alu_src, src, mod1, dest, literal, outmod); \
 	}
 
 #define M_ALU_VECTOR_2(unit, name) \
-	static midgard_instruction v_##name(unsigned src1, midgard_vector_alu_src_t mod1, unsigned src2, midgard_vector_alu_src_t mod2, unsigned dest, bool literal) { \
-		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, src1, mod1, src2, mod2, dest, literal); \
+	static midgard_instruction v_##name(unsigned src1, midgard_vector_alu_src_t mod1, unsigned src2, midgard_vector_alu_src_t mod2, unsigned dest, bool literal, midgard_outmod_e outmod) { \
+		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, src1, mod1, src2, mod2, dest, literal, outmod); \
 	}
 
 #define M_ALU_SCALAR_1(unit, name) \
-	static midgard_instruction s_##name(unsigned src, midgard_vector_alu_src_t mod1, unsigned dest, int oc) { \
-		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, -1, zero_alu_src, src, mod1, dest, oc); \
+	static midgard_instruction s_##name(unsigned src, midgard_vector_alu_src_t mod1, unsigned dest, int oc, midgard_outmod_e outmod) { \
+		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, -1, zero_alu_src, src, mod1, dest, oc, outmod); \
 	}
 
 #define M_ALU_SCALAR_2(unit, name) \
-	static midgard_instruction s_##name(unsigned src1, midgard_vector_alu_src_t mod1, unsigned src2, midgard_vector_alu_src_t mod2, unsigned dest, int oc) { \
-		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, src1, mod1, src2, mod2, dest, oc); \
+	static midgard_instruction s_##name(unsigned src1, midgard_vector_alu_src_t mod1, unsigned src2, midgard_vector_alu_src_t mod2, unsigned dest, int oc, midgard_outmod_e outmod) { \
+		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, src1, mod1, src2, mod2, dest, oc, outmod); \
 	}
 
 /* load/store instructions have both 32-bit and 16-bit variants, depending on
@@ -396,7 +402,7 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 	memcpy(v, &instr->value.f32, 4 * sizeof(float));
 	_mesa_hash_table_u64_insert(ctx->ssa_constants, def.index, v);
 
-	midgard_instruction ins = v_fmov(REGISTER_CONSTANT, blank_alu_src, def.index, false);
+	midgard_instruction ins = v_fmov(REGISTER_CONSTANT, blank_alu_src, def.index, false, midgard_outmod_none);
 	attach_constants(&ins, &instr->value.f32);
 	util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 }
@@ -407,7 +413,8 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 			instr->src[0].src.ssa->index, \
 			n2m_alu_modifiers(&instr->src[0]), \
 			instr->dest.dest.ssa.index, \
-			false); \
+			false, \
+			n2m_alu_outmod(instr->dest.saturate)); \
 		util_dynarray_append(&ctx->current_block, midgard_instruction, ins); \
 		break;
 
@@ -419,7 +426,8 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 			instr->src[1].src.ssa->index, \
 			n2m_alu_modifiers(&instr->src[1]), \
 			instr->dest.dest.ssa.index, \
-			false); \
+			false, \
+			n2m_alu_outmod(instr->dest.saturate)); \
 		util_dynarray_append(&ctx->current_block, midgard_instruction, ins); \
 		break;
 
@@ -522,7 +530,7 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				/* Uniform accesses are 0-cycle, but that's
 				 * abstract, so we emit a fmov that will get
 				 * inlined */
-				EMIT(fmov, reg_slot, blank_alu_src, reg, false);
+				EMIT(fmov, reg_slot, blank_alu_src, reg, false, midgard_outmod_none);
 
 				break;
 			} else if (ctx->stage == MESA_SHADER_FRAGMENT) {
@@ -559,7 +567,7 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				 * framebuffer writeout dance. TODO: Defer
 				 * writes */
 
-				EMIT(fmov, reg, blank_alu_src, 0, true);
+				EMIT(fmov, reg, blank_alu_src, 0, true, midgard_outmod_none);
 				break;
 			}
 
@@ -918,7 +926,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 			/* Errata workaround -- the above write can sometimes
 			 * fail -.- */
 
-			EMIT(fmov, 0, blank_alu_src, 0, true);
+			EMIT(fmov, 0, blank_alu_src, 0, true, midgard_outmod_none);
 			EMIT(alu_br_compact_cond, midgard_jmp_writeout_op_writeout, TAG_ALU_4, -1, COND_FBWRITE);
 
 			/* Finally, register allocation! Must be done after everything else */
