@@ -400,7 +400,10 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		EMIT_ALU_CASE_2(iadd, iadd);
 		EMIT_ALU_CASE_2(isub, isub);
 		EMIT_ALU_CASE_2(imul, imul);
-		EMIT_ALU_CASE_2(imov, imov);
+
+		/* TODO: How does imov work, exactly? */
+		EMIT_ALU_CASE_1(imov, fmov);
+
 		EMIT_ALU_CASE_2(feq, feq);
 		EMIT_ALU_CASE_2(fne, fne);
 		EMIT_ALU_CASE_2(flt, flt);
@@ -957,7 +960,7 @@ static const nir_shader_compiler_options nir_options = {
 	.lower_extract_word = true,
 
 	/* TODO: Reenable when integer ops are understood */
-	//.native_integers = true,
+	.native_integers = false
 };
 
 int main(int argc, char **argv)
