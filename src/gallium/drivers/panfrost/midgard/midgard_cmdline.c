@@ -476,9 +476,12 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			nir_variable *out = instr->variables[0]->var;
 			reg = instr->dest.ssa.index;
 
-			if (out->data.mode == nir_var_uniform) {
-				int slot = out->data.location;
+			/* What this means depends on the type of instruction */
+			/* TODO: Pack? */
 
+			int slot = out->data.location;
+
+			if (out->data.mode == nir_var_uniform) {
 				/* TODO: half-floats */
 				/* TODO: Wrong order, plus how do we know how many? */
 				/* TODO: Spill to ld_uniform */
@@ -491,21 +494,21 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				EMIT(fmov, reg_slot, blank_alu_src, reg, false);
 
 				break;
+			} else if (out->data_mode == nir_var_shader_in && ctx->stage == MESA_SHADER_FRAGMENT) {
+				/* XXX: Half-floats? */
+				/* TODO: swizzle, mask, decode unknown */
+
+				midgard_instruction ins = m_load_vary_32(reg, slot);
+				ins.load_store.unknown = 0xA01E9E; /* XXX: What is this? */
+				util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
+
+				break;
 			}
 
 			/* Worst case, emit a load varying and at least
 			 * that'll show up in the disassembly */
 
-			/* XXX: Only when we're supposed to emit a varying */
-			/* XXX: Which location? */
-			/* XXX: Half-floats? */
-			/* TODO: swizzle, mask, decode unknown */
-
-			midgard_instruction ins = m_load_vary_32(reg, 0);
-			ins.load_store.unknown = 0xA01E9E; /* XXX: What is this? */
-			util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
-
-			//util_dynarray_append(&ctx->current_block, midgard_instruction, m_load_vary_32(reg, 0));
+			util_dynarray_append(&ctx->current_block, midgard_instruction, m_load_vary_32(reg, 0));
 			break;
 	      }
 
