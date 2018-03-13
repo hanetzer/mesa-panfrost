@@ -995,7 +995,6 @@ finalise_to_disk(const char *filename, struct util_dynarray *data)
 
 static const nir_shader_compiler_options nir_options = {
 	.lower_fpow = true,
-	.lower_fsat = true,
 	.lower_scmp = true,
 	.lower_flrp32 = true,
 	.lower_flrp64 = true,
