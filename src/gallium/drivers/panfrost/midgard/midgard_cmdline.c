@@ -383,6 +383,8 @@ optimise_nir(nir_shader *nir)
 				nir_var_shader_out |
 				nir_var_local);
 	} while(progress);
+
+	NIR_PASS(progress, nir, nir_lower_to_source_mods);
 }
 
 static void
