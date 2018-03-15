@@ -387,13 +387,6 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 	 */
 	bool is_vector = instr->dest.dest.ssa.num_components != 1;
 
-	/* Fields common between scalar/vector */
-	midgard_outmod_e outmod = n2m_alu_outmod(instr->dest.saturate);
-
-	unsigned src0 = instr->src[0].src.ssa->index;
-	unsigned src1 = instr->src[1].src.ssa->index;
-	unsigned dest = instr->dest.dest.ssa.index;
-
 	/* Most Midgard ALU ops have a 1:1 correspondance to NIR ops; these are
 	 * supported. A few do not and are therefore commented and TODO to
 	 * figure out what code paths would generate these. Also, there are a
@@ -437,11 +430,11 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		ALU_CASE(MUL, 1, i2f32, i2f);
 		ALU_CASE(MUL, 1, u2f32, i2f);
 		//ALU_CASE(MUL, 2, fatan_pt2);
-		ALU_CASE(MUL, 1, frcp, frcp);
-		ALU_CASE(MUL, 1, frsq, frsqrt);
-		ALU_CASE(MUL, 1, fsqrt, fsqrt);
-		ALU_CASE(MUL, 1, fexp2, fexp2);
-		ALU_CASE(MUL, 1, flog2, flog2);
+		ALU_CASE(LUT, 1, frcp, frcp);
+		ALU_CASE(LUT, 1, frsq, frsqrt);
+		ALU_CASE(LUT, 1, fsqrt, fsqrt);
+		ALU_CASE(LUT, 1, fexp2, fexp2);
+		ALU_CASE(LUT, 1, flog2, flog2);
 
 		// Input needs to be divided by pi due to Midgard weirdness We
 		// define special NIR ops, fsinpi and fcospi, that include the
@@ -449,15 +442,33 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		// That way, the division by pi can take advantage of constant
 		// folding, algebraic simplifications, and so forth.
 
-		ALU_CASE(MUL, 1, fsinpi, fsin);
-		ALU_CASE(MUL, 1, fcospi, fcos);
+		ALU_CASE(LUT, 1, fsinpi, fsin);
+		ALU_CASE(LUT, 1, fcospi, fcos);
 
-		//ALU_CASE(MUL, 2, fatan_pt1);
+		//ALU_CASE(LUT, 2, fatan_pt1);
+
 
 		default:
 			printf("Unhandled ALU op\n");
 			break;
 	}
+
+	/* slut doesn't exist; lower to vlut which acts as scalar
+	 * despite the name */
+
+	if (unit == UNIT_LUT)
+		is_vector = true;
+
+	/* Initialise fields common between scalar/vector instructions */
+	midgard_outmod_e outmod = n2m_alu_outmod(instr->dest.saturate);
+
+	/* src0 will always exist afaik, but src1 will not for 1-argument
+	 * instructions. The latter can only be fetched if the instruction
+	 * needs it, or else we may segfault. */
+
+	unsigned src0 = instr->src[0].src.ssa->index;
+	unsigned src1 = components > 1 ? instr->src[1].src.ssa->index : 0;
+	unsigned dest = instr->dest.dest.ssa.index;
 
 	/* Rather than use the instruction generation helpers, we do it
 	 * ourselves here to avoid the mess */
