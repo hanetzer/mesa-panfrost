@@ -135,16 +135,32 @@ const midgard_vector_alu_src_t blank_alu_src = {
 /* Used for encoding the unused source of 1-op instructions */
 const midgard_vector_alu_src_t zero_alu_src = { 0 };
 
+/* Inputs a NIR ALU source, with modifiers attached if necessary, and outputs
+ * the corresponding Midgard source */
+
 static midgard_vector_alu_src_t
-n2m_alu_modifiers(nir_alu_src *src)
+vector_alu_modifiers(nir_alu_src *src)
 {
 	midgard_vector_alu_src_t alu_src = {
 		.abs = src->abs,
 		.negate = src->negate,
 		.rep_low = 0,
 		.rep_high = 0,
-		.half = 0,
+		.half = 0, /* TODO */
 		.swizzle = SWIZZLE_FROM_ARRAY(src->swizzle)
+	};
+
+	return alu_src;
+}
+
+static midgard_scalar_alu_src_t
+scalar_alu_modifiers(nir_alu_src *src)
+{
+	midgard_scalar_alu_src_t alu_src = {
+		.abs = src->abs,
+		.negate = src->negate,
+		.full = 1, /* TODO */
+		.component = src->swizzle[0] /* TODO: Is this actually correct? */
 	};
 
 	return alu_src;
@@ -456,8 +472,8 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 	};
 
 	if (is_vector) {
-		midgard_vector_alu_src_t mod1 = n2m_alu_modifiers(&instr->src[0]);
-		midgard_vector_alu_src_t mod2 = n2m_alu_modifiers(&instr->src[1]);
+		midgard_vector_alu_src_t mod1 = vector_alu_modifiers(&instr->src[0]);
+		midgard_vector_alu_src_t mod2 = vector_alu_modifiers(&instr->src[1]);
 
 		midgard_vector_alu_t alu = {
 			.op = op,
@@ -471,10 +487,13 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 
 		ins.vector_alu = alu;
 	} else {
+		midgard_scalar_alu_src_t mod1 = scalar_alu_modifiers(&instr->src[0]);
+		midgard_scalar_alu_src_t mod2 = scalar_alu_modifiers(&instr->src[1]);
+
 		midgard_scalar_alu_t alu = {
 			.op = op,
-			.src1 = 0, /* XXX */ //scalar_alu_src_to_unsigned(mod1),
-			.src2 = 0, //scalar_alu_src_to_unsigned(mod2),
+			.src1 = scalar_alu_src_to_unsigned(mod1),
+			.src2 = scalar_alu_src_to_unsigned(mod2),
 			.unknown = 0, /* XXX */
 			.outmod = outmod,
 			.output_full = true, /* XXX */
