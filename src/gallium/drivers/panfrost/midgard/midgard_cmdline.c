@@ -502,7 +502,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 			.reg_mode = midgard_reg_mode_full,
 			.dest_override = midgard_dest_override_none,
 			.outmod = outmod,
-			.mask = 0xFF,
+			.mask = unit == UNIT_LUT ? 0x3 : 0xFF, /* XXX */
 			.src1 = vector_alu_src_to_unsigned(mod1),
 			.src2 = vector_alu_src_to_unsigned(mod2)
 		};
