@@ -472,8 +472,15 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 	};
 
 	if (is_vector) {
-		midgard_vector_alu_src_t mod1 = vector_alu_modifiers(&instr->src[0]);
-		midgard_vector_alu_src_t mod2 = vector_alu_modifiers(&instr->src[1]);
+		midgard_vector_alu_src_t mod1 = zero_alu_src;
+		midgard_vector_alu_src_t mod2 = zero_alu_src;
+
+		if (components == 2) {
+			mod1 = vector_alu_modifiers(&instr->src[0]);
+			mod2 = vector_alu_modifiers(&instr->src[1]);
+		} else if (components == 1) {
+			mod2 = vector_alu_modifiers(&instr->src[0]);
+		}
 
 		midgard_vector_alu_t alu = {
 			.op = op,
@@ -481,7 +488,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 			.dest_override = midgard_dest_override_none,
 			.outmod = outmod,
 			.mask = 0xFF,
-			.src1 = vector_alu_src_to_unsigned(components == 2 ? mod1 : zero_alu_src),
+			.src1 = vector_alu_src_to_unsigned(mod1),
 			.src2 = vector_alu_src_to_unsigned(mod2)
 		};
 
