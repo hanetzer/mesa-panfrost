@@ -428,16 +428,6 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 			};
 
 			util_dynarray_append(&(ctx->current_block), midgard_instruction, ins); 
-			
-
-#if 0
-			EMIT(fmov, 
-
-			src[i] = get_src(ctx, &asrc->src)[asrc->swizzle[0]];
-			if (!src[i])
-				src[i] = create_immed(ctx->block, 0);
-			dst[i] = ir3_MOV(b, src[i], TYPE_U32);
-#endif
 		}
 
 		return;
