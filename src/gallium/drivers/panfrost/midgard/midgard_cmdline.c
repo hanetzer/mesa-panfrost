@@ -230,44 +230,6 @@ M_STORE(store_vary_32);
 /* Used as a sort of intrinsic outside of the ALU code */
 M_ALU_VECTOR_1(MUL, fmov);
 
-#if 0
-M_ALU_VECTOR_2(ADD, fadd);
-M_ALU_VECTOR_2(MUL, fmul);
-M_ALU_VECTOR_2(MUL, fmin);
-M_ALU_VECTOR_2(MUL, fmax);
-M_ALU_VECTOR_1(MUL, fmov);
-M_ALU_VECTOR_1(MUL, ffloor);
-M_ALU_VECTOR_1(MUL, fceil);
-//M_ALU_VECTOR_2(fdot3);
-//M_ALU_VECTOR_2(fdot3r);
-//M_ALU_VECTOR_2(fdot4);
-//M_ALU_VECTOR_2(freduce);
-M_ALU_VECTOR_2(ADD, iadd);
-M_ALU_VECTOR_2(ADD, isub);
-M_ALU_VECTOR_2(MUL, imul);
-M_ALU_VECTOR_2(MUL, imov);
-M_ALU_VECTOR_2(MUL, feq);
-M_ALU_VECTOR_2(MUL, fne);
-M_ALU_VECTOR_2(MUL, flt);
-//M_ALU_VECTOR_2(fle);
-M_ALU_VECTOR_1(MUL, f2i);
-M_ALU_VECTOR_2(MUL, ieq);
-M_ALU_VECTOR_2(MUL, ine);
-M_ALU_VECTOR_2(MUL, ilt);
-//M_ALU_VECTOR_2(ile);
-//M_ALU_VECTOR_2(csel);
-M_ALU_VECTOR_1(MUL, i2f);
-//M_ALU_VECTOR_2(fatan_pt2);
-M_ALU_VECTOR_1(MUL, frcp);
-M_ALU_VECTOR_1(MUL, frsqrt);
-M_ALU_VECTOR_1(MUL, fsqrt);
-M_ALU_VECTOR_1(MUL, fexp2);
-M_ALU_VECTOR_1(MUL, flog2);
-M_ALU_VECTOR_1(MUL, fsin);
-M_ALU_VECTOR_1(MUL, fcos);
-//M_ALU_VECTOR_2(fatan_pt1);
-#endif
-
 /* TODO: Expand into constituent parts since we do understand how this works,
  * no? */
 
