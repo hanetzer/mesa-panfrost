@@ -685,8 +685,14 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					memcpy(&body_words[body_words_count++], &ains->br_compact, sizeof(ains->br_compact));
 					bytes_emitted += sizeof(ains->br_compact);
 				} else {
-					/* TODO: Scalar ops */
-					printf("Scalar the huh?\n");
+					/* TODO: Vector/scalar stuff operates in parallel. This is probably faulty logic */
+
+					memcpy(&register_words[register_words_count++], &ains->registers, sizeof(ains->registers));
+					bytes_emitted += sizeof(alu_register_word);
+
+					body_size[body_words_count] = sizeof(midgard_scalar_alu_t);
+					memcpy(&body_words[body_words_count++], &ains->scalar_alu, sizeof(ains->scalar_alu));
+					bytes_emitted += sizeof(midgard_scalar_alu_t);
 				}
 
 				++index;
