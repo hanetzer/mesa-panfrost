@@ -191,7 +191,7 @@ static unsigned
 scalar_move_src(int component, bool full) {
 	midgard_scalar_alu_src_t src = {
 		.full = full,
-		.component = component
+		.component = component << 1 /* XXX: Ditto */
 	};
 
 	return scalar_alu_src_to_unsigned(src);
@@ -423,7 +423,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 					.src2 = scalar_move_src(component, true),
 					.outmod = midgard_outmod_none,
 					.output_full = true,
-					.output_component = i
+					.output_component = i << 1 /* Skew full */
 				}
 			};
 
