@@ -135,6 +135,24 @@ const midgard_vector_alu_src_t blank_alu_src = {
 /* Used for encoding the unused source of 1-op instructions */
 const midgard_vector_alu_src_t zero_alu_src = { 0 };
 
+/* Coerce structs to integer */
+
+static unsigned
+vector_alu_src_to_unsigned(midgard_vector_alu_src_t src)
+{
+	unsigned u;
+	memcpy(&u, &src, sizeof(src));
+	return u;
+}
+
+static unsigned
+scalar_alu_src_to_unsigned(midgard_scalar_alu_src_t src)
+{
+	unsigned u;
+	memcpy(&u, &src, sizeof(src));
+	return u;
+}
+
 /* Inputs a NIR ALU source, with modifiers attached if necessary, and outputs
  * the corresponding Midgard source */
 
@@ -159,7 +177,6 @@ vector_alu_modifiers(nir_alu_src *src)
 static midgard_scalar_alu_src_t
 scalar_alu_modifiers(nir_alu_src *src, bool full1)
 {
-	printf("Component: %d\n", src->swizzle[0]);
 	midgard_scalar_alu_src_t alu_src = {
 		.abs = src->abs,
 		.negate = src->negate,
@@ -170,26 +187,20 @@ scalar_alu_modifiers(nir_alu_src *src, bool full1)
 	return alu_src;
 }
 
+static unsigned 
+scalar_move_src(int component, bool full) {
+	midgard_scalar_alu_src_t src = {
+		.full = full,
+		.component = component
+	};
+
+	return scalar_alu_src_to_unsigned(src);
+}
+
 static midgard_outmod_e
 n2m_alu_outmod(bool saturate)
 {
 	return saturate ? midgard_outmod_sat : midgard_outmod_none;
-}
-
-static unsigned
-vector_alu_src_to_unsigned(midgard_vector_alu_src_t src)
-{
-	unsigned u;
-	memcpy(&u, &src, sizeof(src));
-	return u;
-}
-
-static unsigned
-scalar_alu_src_to_unsigned(midgard_scalar_alu_src_t src)
-{
-	unsigned u;
-	memcpy(&u, &src, sizeof(src));
-	return u;
 }
 
 static midgard_instruction
@@ -322,6 +333,7 @@ optimise_nir(nir_shader *nir)
 		NIR_PASS(progress, nir, nir_lower_var_copies);
 
 		NIR_PASS(progress, nir, nir_lower_vars_to_ssa);
+		//NIR_PASS(progress, nir, nir_lower_vec_to_movs);
 		NIR_PASS(progress, nir, nir_copy_prop);
 		NIR_PASS(progress, nir, nir_opt_remove_phis);
 		NIR_PASS(progress, nir, nir_opt_dce);
@@ -382,6 +394,55 @@ unit_enum_to_midgard(int unit_enum, int is_vector) {
 static void
 emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 {
+	unsigned dest = instr->dest.dest.ssa.index;
+
+	/* lower_vec_to_moves generates really bad code, so we use the pass in Freedreno instead */
+	if ((instr->op == nir_op_vec2) ||
+		(instr->op == nir_op_vec3) ||
+		(instr->op == nir_op_vec4)) {
+
+		for (int i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
+			nir_alu_src *asrc = &instr->src[i];
+
+			int input = asrc->src.ssa->index;
+			int component = asrc->swizzle[0];
+
+			midgard_instruction ins = {
+				.type = TAG_ALU_4,
+				.unit = ALU_ENAB_SCAL_MUL,
+				.unused = false,
+				.uses_ssa = true,
+				.ssa_args = {
+					.src0 = -1,
+					.src1 = input,
+					.dest = dest,
+				},
+				.scalar_alu = {
+					.op = midgard_alu_op_fmov,
+					.src1 = 0,
+					.src2 = scalar_move_src(component, true),
+					.outmod = midgard_outmod_none,
+					.output_full = true,
+					.output_component = i
+				}
+			};
+
+			util_dynarray_append(&(ctx->current_block), midgard_instruction, ins); 
+			
+
+#if 0
+			EMIT(fmov, 
+
+			src[i] = get_src(ctx, &asrc->src)[asrc->swizzle[0]];
+			if (!src[i])
+				src[i] = create_immed(ctx->block, 0);
+			dst[i] = ir3_MOV(b, src[i], TYPE_U32);
+#endif
+		}
+
+		return;
+	}
+
 	/* ALU ops are unified in NIR between scalar/vector, but partially
 	 * split in Midgard. Reconcile that here, to avoid diverging code paths
 	 */
@@ -468,7 +529,6 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 
 	unsigned src0 = instr->src[0].src.ssa->index;
 	unsigned src1 = components > 1 ? instr->src[1].src.ssa->index : 0;
-	unsigned dest = instr->dest.dest.ssa.index;
 
 	/* Rather than use the instruction generation helpers, we do it
 	 * ourselves here to avoid the mess */
@@ -526,7 +586,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		ins.scalar_alu = alu;
 	}
 
-	util_dynarray_append(&ctx->current_block, midgard_instruction, ins); \
+	util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 }
 
 static void
