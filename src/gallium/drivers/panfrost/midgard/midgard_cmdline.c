@@ -465,7 +465,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		.uses_ssa = true,
 		.ssa_args = {
 			.src0 = components == 2 ? src0 : -1,
-			.src1 = src1,
+			.src1 = components == 2 ? src1 : src0,
 			.dest = dest
 		},
 		.vector = is_vector
