@@ -202,34 +202,6 @@ m_alu_vector(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_sr
 	return ins;
 }
 
-static midgard_instruction
-m_alu_scalar(midgard_alu_op_e op, int unit, unsigned src0, midgard_scalar_alu_src_t mod1, unsigned src1, midgard_scalar_alu_src_t mod2, unsigned dest, int output_component, midgard_outmod_e outmod)
-{
-	midgard_instruction ins = {
-		.type = TAG_ALU_4,
-		.unit = unit,
-		.unused = false,
-		.uses_ssa = true,
-		.ssa_args = {
-			.src0 = src0,
-			.src1 = src1,
-			.dest = dest,
-		},
-		.vector = false,
-		.scalar_alu = {
-			.op = op,
-			.src1 = scalar_alu_src_to_unsigned(mod1),
-			.src2 = scalar_alu_src_to_unsigned(mod2),
-			.unknown = 0, /* XXX */
-			.outmod = outmod,
-			.output_full = true, /* XXX */
-			.output_component = output_component
-		},
-	};
-
-	return ins;
-}
-
 #define M_ALU_VECTOR_1(unit, name) \
 	static midgard_instruction v_##name(unsigned src, midgard_vector_alu_src_t mod1, unsigned dest, bool literal, midgard_outmod_e outmod) { \
 		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, -1, zero_alu_src, src, mod1, dest, literal, outmod); \
@@ -238,16 +210,6 @@ m_alu_scalar(midgard_alu_op_e op, int unit, unsigned src0, midgard_scalar_alu_sr
 #define M_ALU_VECTOR_2(unit, name) \
 	static midgard_instruction v_##name(unsigned src1, midgard_vector_alu_src_t mod1, unsigned src2, midgard_vector_alu_src_t mod2, unsigned dest, bool literal, midgard_outmod_e outmod) { \
 		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, src1, mod1, src2, mod2, dest, literal, outmod); \
-	}
-
-#define M_ALU_SCALAR_1(unit, name) \
-	static midgard_instruction s_##name(unsigned src, midgard_vector_alu_src_t mod1, unsigned dest, int oc, midgard_outmod_e outmod) { \
-		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, -1, zero_alu_src, src, mod1, dest, oc, outmod); \
-	}
-
-#define M_ALU_SCALAR_2(unit, name) \
-	static midgard_instruction s_##name(unsigned src1, midgard_vector_alu_src_t mod1, unsigned src2, midgard_vector_alu_src_t mod2, unsigned dest, int oc, midgard_outmod_e outmod) { \
-		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, src1, mod1, src2, mod2, dest, oc, outmod); \
 	}
 
 /* load/store instructions have both 32-bit and 16-bit variants, depending on
@@ -265,6 +227,10 @@ M_LOAD(load_uniform_32);
 //M_STORE(store_vary_16);
 M_STORE(store_vary_32);
 
+/* Used as a sort of intrinsic outside of the ALU code */
+M_ALU_VECTOR_1(MUL, fmov);
+
+#if 0
 M_ALU_VECTOR_2(ADD, fadd);
 M_ALU_VECTOR_2(MUL, fmul);
 M_ALU_VECTOR_2(MUL, fmin);
@@ -300,8 +266,7 @@ M_ALU_VECTOR_1(MUL, flog2);
 M_ALU_VECTOR_1(MUL, fsin);
 M_ALU_VECTOR_1(MUL, fcos);
 //M_ALU_VECTOR_2(fatan_pt1);
-
-M_ALU_SCALAR_1(MUL, fmov);
+#endif
 
 /* TODO: Expand into constituent parts since we do understand how this works,
  * no? */
@@ -407,80 +372,94 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 	util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 }
 
-#define EMIT_ALU_CASE_1(op_nir, op_midgard) \
-	case nir_op_##op_nir: \
-		ins = v_##op_midgard( \
-			instr->src[0].src.ssa->index, \
-			n2m_alu_modifiers(&instr->src[0]), \
-			instr->dest.dest.ssa.index, \
-			false, \
-			n2m_alu_outmod(instr->dest.saturate)); \
-		util_dynarray_append(&ctx->current_block, midgard_instruction, ins); \
-		break;
+static unsigned
+unit_enum_to_midgard(int unit_enum, int is_vector) {
+	if (is_vector) {
+		switch(unit_enum) {
+			case UNIT_MUL: return ALU_ENAB_VEC_MUL;
+			case UNIT_ADD: return ALU_ENAB_VEC_ADD;
+			case UNIT_LUT: return ALU_ENAB_VEC_LUT;
+			default: return 0; /* Should never happen */
+		}
+	} else {
+		switch(unit_enum) {
+			case UNIT_MUL: return ALU_ENAB_SCAL_MUL;
+			case UNIT_ADD: return ALU_ENAB_SCAL_ADD;
+			default: return 0; /* Should never happen */
+		}
+	}
+}
 
-#define EMIT_ALU_CASE_2(op_nir, op_midgard) \
-	case nir_op_##op_nir: \
-		ins = v_##op_midgard( \
-			instr->src[0].src.ssa->index, \
-			n2m_alu_modifiers(&instr->src[0]), \
-			instr->src[1].src.ssa->index, \
-			n2m_alu_modifiers(&instr->src[1]), \
-			instr->dest.dest.ssa.index, \
-			false, \
-			n2m_alu_outmod(instr->dest.saturate)); \
-		util_dynarray_append(&ctx->current_block, midgard_instruction, ins); \
+#define ALU_CASE(_unit, _components, nir, _op) \
+	case nir_op_##nir: \
+		unit = UNIT_##_unit; \
+		components = _components; \
+		op = midgard_alu_op_##_op; \
 		break;
-
 
 static void
 emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 {
-	midgard_instruction ins;
+	/* ALU ops are unified in NIR between scalar/vector, but partially
+	 * split in Midgard. Reconcile that here, to avoid diverging code paths
+	 */
+	bool is_vector = instr->dest.dest.ssa.num_components != 1;
+
+	/* Fields common between scalar/vector */
+	midgard_outmod_e outmod = n2m_alu_outmod(instr->dest.saturate);
+
+	unsigned src0 = instr->src[0].src.ssa->index;
+	unsigned src1 = instr->src[1].src.ssa->index;
+	unsigned dest = instr->dest.dest.ssa.index;
 
 	/* Most Midgard ALU ops have a 1:1 correspondance to NIR ops; these are
 	 * supported. A few do not and are therefore commented and TODO to
 	 * figure out what code paths would generate these. Also, there are a
 	 * number of NIR ops which Midgard does not support and need to be
-	 * lowered, also TODO */
+	 * lowered, also TODO. This switch block emits the opcode and calling
+	 * convention of the Midgard instruction; actual packing is done in emit_alu below
+	 * */
+
+	unsigned op, unit, components;
 
 	switch(instr->op) {
-		EMIT_ALU_CASE_2(fadd, fadd);
-		EMIT_ALU_CASE_2(fmul, fmul);
-		EMIT_ALU_CASE_2(fmin, fmin);
-		EMIT_ALU_CASE_2(fmax, fmax);
-		EMIT_ALU_CASE_1(fmov, fmov);
-		EMIT_ALU_CASE_1(ffloor, ffloor);
-		EMIT_ALU_CASE_1(fceil, fceil);
-		//EMIT_ALU_CASE_2(fdot3);
-		//EMIT_ALU_CASE_2(fdot3r);
-		//EMIT_ALU_CASE_2(fdot4);
-		//EMIT_ALU_CASE_2(freduce);
-		EMIT_ALU_CASE_2(iadd, iadd);
-		EMIT_ALU_CASE_2(isub, isub);
-		EMIT_ALU_CASE_2(imul, imul);
+		ALU_CASE(ADD, 2, fadd, fadd);
+		ALU_CASE(MUL, 2, fmul, fmul);
+		ALU_CASE(MUL, 2, fmin, fmin);
+		ALU_CASE(MUL, 2, fmax, fmax);
+		ALU_CASE(MUL, 1, fmov, fmov);
+		ALU_CASE(MUL, 1, ffloor, ffloor);
+		ALU_CASE(MUL, 1, fceil, fceil);
+		//ALU_CASE(MUL, 2, fdot3);
+		//ALU_CASE(MUL, 2, fdot3r);
+		//ALU_CASE(MUL, 2, fdot4);
+		//ALU_CASE(MUL, 2, freduce);
+		ALU_CASE(ADD, 2, iadd, iadd);
+		ALU_CASE(ADD, 2, isub, isub);
+		ALU_CASE(MUL, 2, imul, imul);
 
 		/* TODO: How does imov work, exactly? */
-		EMIT_ALU_CASE_1(imov, fmov);
+		ALU_CASE(MUL, 1, imov, fmov);
 
-		EMIT_ALU_CASE_2(feq, feq);
-		EMIT_ALU_CASE_2(fne, fne);
-		EMIT_ALU_CASE_2(flt, flt);
-		//EMIT_ALU_CASE_2(fle);
-		EMIT_ALU_CASE_1(f2i32, f2i);
-		EMIT_ALU_CASE_1(f2u32, f2i);
-		EMIT_ALU_CASE_2(ieq, ieq);
-		EMIT_ALU_CASE_2(ine, ine);
-		EMIT_ALU_CASE_2(ilt, ilt);
-		//EMIT_ALU_CASE_2(ile);
-		//EMIT_ALU_CASE_2(csel, csel);
-		EMIT_ALU_CASE_1(i2f32, i2f);
-		EMIT_ALU_CASE_1(u2f32, i2f);
-		//EMIT_ALU_CASE_2(fatan_pt2);
-		EMIT_ALU_CASE_1(frcp, frcp);
-		EMIT_ALU_CASE_1(frsq, frsqrt);
-		EMIT_ALU_CASE_1(fsqrt, fsqrt);
-		EMIT_ALU_CASE_1(fexp2, fexp2);
-		EMIT_ALU_CASE_1(flog2, flog2);
+		ALU_CASE(MUL, 2, feq, feq);
+		ALU_CASE(MUL, 2, fne, fne);
+		ALU_CASE(MUL, 2, flt, flt);
+		//ALU_CASE(MUL, 2, fle);
+		ALU_CASE(MUL, 1, f2i32, f2i);
+		ALU_CASE(MUL, 1, f2u32, f2i);
+		ALU_CASE(MUL, 2, ieq, ieq);
+		ALU_CASE(MUL, 2, ine, ine);
+		ALU_CASE(MUL, 2, ilt, ilt);
+		//ALU_CASE(MUL, 2, ile);
+		//ALU_CASE(MUL, 2, csel, csel);
+		ALU_CASE(MUL, 1, i2f32, i2f);
+		ALU_CASE(MUL, 1, u2f32, i2f);
+		//ALU_CASE(MUL, 2, fatan_pt2);
+		ALU_CASE(MUL, 1, frcp, frcp);
+		ALU_CASE(MUL, 1, frsq, frsqrt);
+		ALU_CASE(MUL, 1, fsqrt, fsqrt);
+		ALU_CASE(MUL, 1, fexp2, fexp2);
+		ALU_CASE(MUL, 1, flog2, flog2);
 
 		// Input needs to be divided by pi due to Midgard weirdness We
 		// define special NIR ops, fsinpi and fcospi, that include the
@@ -488,15 +467,62 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		// That way, the division by pi can take advantage of constant
 		// folding, algebraic simplifications, and so forth.
 
-		EMIT_ALU_CASE_1(fsinpi, fsin);
-		EMIT_ALU_CASE_1(fcospi, fcos);
+		ALU_CASE(MUL, 1, fsinpi, fsin);
+		ALU_CASE(MUL, 1, fcospi, fcos);
 
-		//EMIT_ALU_CASE_2(fatan_pt1);
+		//ALU_CASE(MUL, 2, fatan_pt1);
 
 		default:
 			printf("Unhandled ALU op\n");
 			break;
 	}
+
+	/* Rather than use the instruction generation helpers, we do it
+	 * ourselves here to avoid the mess */
+
+	midgard_instruction ins = {
+		.type = TAG_ALU_4,
+		.unit = unit_enum_to_midgard(unit, is_vector),
+		.unused = false,
+		.uses_ssa = true,
+		.ssa_args = {
+			.src0 = components == 2 ? src0 : -1,
+			.src1 = src1,
+			.dest = dest
+		},
+		.vector = is_vector
+	};
+
+	if (is_vector) {
+		midgard_vector_alu_src_t mod1 = n2m_alu_modifiers(&instr->src[0]);
+		midgard_vector_alu_src_t mod2 = n2m_alu_modifiers(&instr->src[1]);
+
+		midgard_vector_alu_t alu = {
+			.op = op,
+			.reg_mode = midgard_reg_mode_full,
+			.dest_override = midgard_dest_override_none,
+			.outmod = outmod,
+			.mask = 0xFF,
+			.src1 = vector_alu_src_to_unsigned(components == 2 ? mod1 : zero_alu_src),
+			.src2 = vector_alu_src_to_unsigned(mod2)
+		};
+
+		ins.vector_alu = alu;
+	} else {
+		midgard_scalar_alu_t alu = {
+			.op = op,
+			.src1 = 0, /* XXX */ //scalar_alu_src_to_unsigned(mod1),
+			.src2 = 0, //scalar_alu_src_to_unsigned(mod2),
+			.unknown = 0, /* XXX */
+			.outmod = outmod,
+			.output_full = true, /* XXX */
+			.output_component = 0, /* XXX output_component */
+		};
+
+		ins.scalar_alu = alu;
+	}
+
+	util_dynarray_append(&ctx->current_block, midgard_instruction, ins); \
 }
 
 static void

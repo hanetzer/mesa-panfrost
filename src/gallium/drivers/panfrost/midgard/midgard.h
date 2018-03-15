@@ -161,6 +161,13 @@ __attribute__((__packed__))
 #define ALU_ENAB_BR_COMPACT (1 << 26)
 #define ALU_ENAB_BRANCH     (1 << 27)
 
+/* Vector-independant shorthands for the above; these numbers are arbitrary and
+ * not from the ISA. Convert to the above with unit_enum_to_midgard */
+
+#define UNIT_MUL 0
+#define UNIT_ADD 1
+#define UNIT_LUT 2
+
 /* ALU register fields are weird because of inline constants */
 
 typedef struct
