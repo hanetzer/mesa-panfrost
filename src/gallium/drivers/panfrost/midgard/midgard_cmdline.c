@@ -153,14 +153,18 @@ vector_alu_modifiers(nir_alu_src *src)
 	return alu_src;
 }
 
+/* Full 1 parameters refer to "non-half-float mode" and "first src in scalar
+ * instruction" to account for a weird special case */
+
 static midgard_scalar_alu_src_t
-scalar_alu_modifiers(nir_alu_src *src)
+scalar_alu_modifiers(nir_alu_src *src, bool full1)
 {
+	printf("Component: %d\n", src->swizzle[0]);
 	midgard_scalar_alu_src_t alu_src = {
 		.abs = src->abs,
 		.negate = src->negate,
 		.full = 1, /* TODO */
-		.component = src->swizzle[0] /* TODO: Is this actually correct? */
+		.component = src->swizzle[0] << (full1 ? 1 : 0) /* TODO: Is this actually correct? */
 	};
 
 	return alu_src;
@@ -494,8 +498,9 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 
 		ins.vector_alu = alu;
 	} else {
-		midgard_scalar_alu_src_t mod1 = scalar_alu_modifiers(&instr->src[0]);
-		midgard_scalar_alu_src_t mod2 = scalar_alu_modifiers(&instr->src[1]);
+		bool is_full = true; /* TODO */
+		midgard_scalar_alu_src_t mod1 = scalar_alu_modifiers(&instr->src[0], is_full);
+		midgard_scalar_alu_src_t mod2 = scalar_alu_modifiers(&instr->src[1], false);
 
 		midgard_scalar_alu_t alu = {
 			.op = op,
