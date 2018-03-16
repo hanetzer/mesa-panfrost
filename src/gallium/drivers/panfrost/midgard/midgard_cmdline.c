@@ -241,7 +241,7 @@ m_alu_vector(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_sr
 
 #define M_ALU_VECTOR_1(unit, name) \
 	static midgard_instruction v_##name(unsigned src, midgard_vector_alu_src_t mod1, unsigned dest, bool literal, midgard_outmod_e outmod) { \
-		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, -1, zero_alu_src, src, mod1, dest, literal, outmod); \
+		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, SSA_UNUSED_1, zero_alu_src, src, mod1, dest, literal, outmod); \
 	}
 
 #define M_ALU_VECTOR_2(unit, name) \
@@ -428,7 +428,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 				.unused = false,
 				.uses_ssa = true,
 				.ssa_args = {
-					.src0 = -1,
+					.src0 = SSA_UNUSED_1,
 					.src1 = input,
 					.dest = dest,
 				},
@@ -544,8 +544,8 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		.unused = false,
 		.uses_ssa = true,
 		.ssa_args = {
-			.src0 = components == 2 || components == 0 ? src0 : -1,
-			.src1 = components == 2 ? src1 : components == 1 ? src0 : 0,
+			.src0 = components == 2 || components == 0 ? src0 : SSA_UNUSED_1,
+			.src1 = components == 2 ? src1 : components == 1 ? src0 : SSA_UNUSED_0,
 			.dest = dest
 		},
 		.vector = is_vector
@@ -705,6 +705,30 @@ emit_instr(compiler_context *ctx, struct nir_instr *instr)
 
 /* TODO: Write a register allocator. But for now, just set register = ssa index... */
 
+/* Transform to account for SSA register aliases */
+
+static int
+dealias_register(int reg)
+{
+	/* Not an alias */
+
+	if (reg >= 0)
+		return reg;
+
+	switch(reg) {
+		/* fmov style unused */
+		case SSA_UNUSED_0: return 0;
+		
+		/* lut style unused */
+		case SSA_UNUSED_1: return REGISTER_UNUSED;
+
+		default:
+		   printf("Unknown SSA register alias %d\n", reg);
+		   return 31;
+	}
+}
+
+
 static void
 allocate_registers(compiler_context *ctx)
 {
@@ -714,9 +738,9 @@ allocate_registers(compiler_context *ctx)
 		switch (ins->type) {
 			case TAG_ALU_4:
 				ins->registers.output_reg = args.dest;
-				ins->registers.input1_reg = (args.src0 >= 0) ? args.src0 : REGISTER_UNUSED;
-				ins->registers.input2_reg = args.src1;
-				
+				ins->registers.input1_reg = dealias_register(args.src0);
+				ins->registers.input2_reg = dealias_register(args.src1);
+
 				break;
 			
 			case TAG_LOAD_STORE_4:

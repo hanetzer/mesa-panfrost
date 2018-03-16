@@ -276,6 +276,11 @@ __attribute__((__packed__))
 #define REGISTER_TEXTURE_2 29
 #define REGISTER_SELECT  31
 
+/* SSA helper aliases to mimic the registers */
+
+#define SSA_UNUSED_0 -1
+#define SSA_UNUSED_1 -2
+
 /* Swizzle support */
 
 #define SWIZZLE(A, B, C, D) ((D << 6) | (C << 4) | (B << 2) | (A << 0))
