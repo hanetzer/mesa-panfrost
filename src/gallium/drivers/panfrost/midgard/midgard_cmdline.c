@@ -132,6 +132,8 @@ const midgard_vector_alu_src_t blank_alu_src = {
 	.swizzle = SWIZZLE(COMPONENT_X, COMPONENT_Y, COMPONENT_Z, COMPONENT_W),
 };
 
+const midgard_scalar_alu_src_t blank_scalar_alu_src = {};
+
 /* Used for encoding the unused source of 1-op instructions */
 const midgard_vector_alu_src_t zero_alu_src = { 0 };
 
@@ -159,6 +161,8 @@ scalar_alu_src_to_unsigned(midgard_scalar_alu_src_t src)
 static midgard_vector_alu_src_t
 vector_alu_modifiers(nir_alu_src *src)
 {
+	if (!src) return blank_alu_src;
+
 	midgard_vector_alu_src_t alu_src = {
 		.abs = src->abs,
 		.negate = src->negate,
@@ -177,6 +181,8 @@ vector_alu_modifiers(nir_alu_src *src)
 static midgard_scalar_alu_src_t
 scalar_alu_modifiers(nir_alu_src *src, bool full1)
 {
+	if (!src) return blank_scalar_alu_src;
+
 	midgard_scalar_alu_src_t alu_src = {
 		.abs = src->abs,
 		.negate = src->negate,
@@ -545,39 +551,37 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		.vector = is_vector
 	};
 
+	nir_alu_src *nirmod0 = NULL;
+	nir_alu_src *nirmod1 = NULL;
+
+	if (components == 2) {
+		nirmod0 = &instr->src[0];
+		nirmod1 = &instr->src[1];
+	} else if (components == 1) {
+		nirmod1 = &instr->src[0];
+	} else if (components == 0) {
+		nirmod0 = &instr->src[0];
+	}
+
 	if (is_vector) {
-		midgard_vector_alu_src_t mod1 = zero_alu_src;
-		midgard_vector_alu_src_t mod2 = zero_alu_src;
-
-		if (components == 2) {
-			mod1 = vector_alu_modifiers(&instr->src[0]);
-			mod2 = vector_alu_modifiers(&instr->src[1]);
-		} else if (components == 1) {
-			mod2 = vector_alu_modifiers(&instr->src[0]);
-		} else if (components == 0) {
-			mod1 = vector_alu_modifiers(&instr->src[0]);
-		}
-
 		midgard_vector_alu_t alu = {
 			.op = op,
 			.reg_mode = midgard_reg_mode_full,
 			.dest_override = midgard_dest_override_none,
 			.outmod = outmod,
 			.mask = unit == UNIT_LUT ? 0x3 : 0xFF, /* XXX */
-			.src1 = vector_alu_src_to_unsigned(mod1),
-			.src2 = vector_alu_src_to_unsigned(mod2)
+			.src1 = vector_alu_src_to_unsigned(vector_alu_modifiers(nirmod0)),
+			.src2 = vector_alu_src_to_unsigned(vector_alu_modifiers(nirmod1)),
 		};
 
 		ins.vector_alu = alu;
 	} else {
 		bool is_full = true; /* TODO */
-		midgard_scalar_alu_src_t mod1 = scalar_alu_modifiers(&instr->src[0], is_full);
-		midgard_scalar_alu_src_t mod2 = scalar_alu_modifiers(&instr->src[1], false);
 
 		midgard_scalar_alu_t alu = {
 			.op = op,
-			.src1 = scalar_alu_src_to_unsigned(mod1),
-			.src2 = scalar_alu_src_to_unsigned(mod2),
+			.src1 = scalar_alu_src_to_unsigned(scalar_alu_modifiers(nirmod0, is_full)),
+			.src2 = scalar_alu_src_to_unsigned(scalar_alu_modifiers(nirmod1, true)),
 			.unknown = 0, /* XXX */
 			.outmod = outmod,
 			.output_full = true, /* XXX */
