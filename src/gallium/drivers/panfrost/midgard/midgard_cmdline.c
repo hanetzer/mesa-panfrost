@@ -495,12 +495,12 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		//ALU_CASE(MUL, 2, csel, csel);
 		ALU_CASE(MUL, 1, i2f32, i2f);
 		ALU_CASE(MUL, 1, u2f32, i2f);
-		//ALU_CASE(MUL, 2, fatan_pt2);
+		//ALU_CASE(LUT, 0, fatan_pt2);
 		ALU_CASE(LUT, 0, frcp, frcp);
-		ALU_CASE(LUT, 1, frsq, frsqrt);
-		ALU_CASE(LUT, 1, fsqrt, fsqrt);
-		ALU_CASE(LUT, 1, fexp2, fexp2);
-		ALU_CASE(LUT, 1, flog2, flog2);
+		ALU_CASE(LUT, 0, frsq, frsqrt);
+		ALU_CASE(LUT, 0, fsqrt, fsqrt);
+		ALU_CASE(LUT, 0, fexp2, fexp2);
+		ALU_CASE(LUT, 0, flog2, flog2);
 
 		// Input needs to be divided by pi due to Midgard weirdness We
 		// define special NIR ops, fsinpi and fcospi, that include the
@@ -508,10 +508,10 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		// That way, the division by pi can take advantage of constant
 		// folding, algebraic simplifications, and so forth.
 
-		ALU_CASE(LUT, 1, fsinpi, fsin);
-		ALU_CASE(LUT, 1, fcospi, fcos);
+		ALU_CASE(LUT, 0, fsinpi, fsin);
+		ALU_CASE(LUT, 0, fcospi, fcos);
 
-		//ALU_CASE(LUT, 2, fatan_pt1);
+		//ALU_CASE(LUT, 0, fatan_pt1);
 
 
 		default:
@@ -803,6 +803,9 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 				}
 
 				++index;
+
+				/* TODO: Emit pipeline registers and batch instructions once we know how XXX */
+				break;
 			}
 
 			/* Bubble up the number of instructions for skipping */
