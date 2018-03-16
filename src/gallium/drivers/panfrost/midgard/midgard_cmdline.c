@@ -384,6 +384,15 @@ unit_enum_to_midgard(int unit_enum, int is_vector) {
 	}
 }
 
+/* Unit: shorthand for the unit used by this instruction (MUL, ADD, LUT).
+ * Components: Number/style of arguments:
+ * 	2: Standard two argument op (fadd, fmul)
+ * 	1: Flipped one-argument op (fmov, imov)
+ * 	0: Standard one-argument op (frcp)
+ * NIR: NIR instruction op.
+ * Op: Midgard instruction op.
+ */
+
 #define ALU_CASE(_unit, _components, nir, _op) \
 	case nir_op_##nir: \
 		unit = UNIT_##_unit; \
@@ -481,7 +490,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		ALU_CASE(MUL, 1, i2f32, i2f);
 		ALU_CASE(MUL, 1, u2f32, i2f);
 		//ALU_CASE(MUL, 2, fatan_pt2);
-		ALU_CASE(LUT, 1, frcp, frcp);
+		ALU_CASE(LUT, 0, frcp, frcp);
 		ALU_CASE(LUT, 1, frsq, frsqrt);
 		ALU_CASE(LUT, 1, fsqrt, fsqrt);
 		ALU_CASE(LUT, 1, fexp2, fexp2);
@@ -529,8 +538,8 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		.unused = false,
 		.uses_ssa = true,
 		.ssa_args = {
-			.src0 = components == 2 ? src0 : -1,
-			.src1 = components == 2 ? src1 : src0,
+			.src0 = components == 2 || components == 0 ? src0 : -1,
+			.src1 = components == 2 ? src1 : components == 1 ? src0 : 0,
 			.dest = dest
 		},
 		.vector = is_vector
@@ -545,6 +554,8 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 			mod2 = vector_alu_modifiers(&instr->src[1]);
 		} else if (components == 1) {
 			mod2 = vector_alu_modifiers(&instr->src[0]);
+		} else if (components == 0) {
+			mod1 = vector_alu_modifiers(&instr->src[0]);
 		}
 
 		midgard_vector_alu_t alu = {
