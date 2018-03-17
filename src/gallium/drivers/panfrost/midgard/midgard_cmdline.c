@@ -846,10 +846,10 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 			int index = 0, last_unit = 0;
 
 			while (ins + index) {
-				midgard_instruction *ains = ins + (index++);
+				midgard_instruction *ains = ins + index; 
 
 				/* Ensure that the chain can continue */
-				if (ains->unused) continue;
+				if (ains->unused) goto skip_instruction;
 				if (ains->type != TAG_ALU_4 || ains->unit <= last_unit) break;
 
 				control |= ains->unit;
@@ -879,6 +879,9 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					/* TODO: Emit pipeline registers and batch instructions once we know how XXX */
 					break;
 				}
+
+skip_instruction:
+				++index;
 			}
 
 			/* Bubble up the number of instructions for skipping */
