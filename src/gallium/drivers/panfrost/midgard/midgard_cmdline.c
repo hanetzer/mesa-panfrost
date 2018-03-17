@@ -402,7 +402,7 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 {
 	nir_ssa_def def = instr->def;
 
-	float *v = ralloc_array(ctx->ssa_constants, float, 4);
+	float *v = ralloc_array(NULL, float, 4);
 	memcpy(v, &instr->value.f32, 4 * sizeof(float));
 	_mesa_hash_table_u64_insert(ctx->ssa_constants, def.index, v);
 
