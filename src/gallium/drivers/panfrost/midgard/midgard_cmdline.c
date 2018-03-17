@@ -391,7 +391,6 @@ alias_ssa(compiler_context *ctx, int dest, int src, bool literal_dest)
 	if (literal_dest) {
 		_mesa_hash_table_u64_insert(ctx->register_to_ssa, src, (uintptr_t) dest + 1);
 	} else {
-		printf("Alias %d->%d\n", src, dest);
 		_mesa_hash_table_u64_insert(ctx->ssa_to_alias, dest, (uintptr_t) src + 1);
 		_mesa_set_add(ctx->leftover_ssa_to_alias, dest);
 	}
@@ -753,11 +752,8 @@ emit_instr(compiler_context *ctx, struct nir_instr *instr)
 static int
 dealias_register(int reg)
 {
-	printf("Da %d\n", reg);
-	if (reg >= SSA_FIXED_MINIMUM) {
-		printf("Dealias\n");
+	if (reg >= SSA_FIXED_MINIMUM)
 		return SSA_REG_FROM_FIXED(reg);
-	}
 
 	if (reg >= 0)
 		return reg;
@@ -1080,12 +1076,21 @@ eliminate_constant_mov(compiler_context *ctx)
  * uniforms) */
 
 static void
-map_ssa_to_alias(struct hash_table_u64 *ssa_to_alias, int *ref)
+map_ssa_to_alias(compiler_context *ctx, int *ref)
 {
-	uintptr_t alias = _mesa_hash_table_u64_search(ssa_to_alias, *ref);
+	uintptr_t alias = _mesa_hash_table_u64_search(ctx->ssa_to_alias, *ref);
 	
-	if (alias)
+	if (alias) {
+		/* Remove entry in leftovers to avoid a redunant fmov */
+
+		struct set_entry *leftover = _mesa_set_search(ctx->leftover_ssa_to_alias, (uintptr_t) *ref);
+
+		if (leftover)
+			_mesa_set_remove(ctx->leftover_ssa_to_alias, leftover);
+
+		/* Assign the alias map */
 		*ref = alias;
+	}
 }
 
 /* If there are leftovers after the below pass, emit actual fmov
@@ -1095,33 +1100,22 @@ static void
 emit_leftover_move(compiler_context *ctx)
 {
 	struct set_entry *leftover;
-	printf("emit\n");
 
 	set_foreach(ctx->leftover_ssa_to_alias, leftover) {
 		int base = (uintptr_t) leftover->key;
 		int mapped = base;
-		map_ssa_to_alias(ctx->ssa_to_alias, &mapped);
-		printf("Leftover %d->%d\n", base, mapped);
 
+		map_ssa_to_alias(ctx, &mapped);
 		EMIT(fmov, mapped, blank_alu_src, base, false, midgard_outmod_none);
 	}
-
-#if 0
-	printf("entry %p\n", _mesa_hash_table_next_entry(ctx->ssa_to_alias->table, NULL));
-
-	hash_table_foreach(ctx->register_to_ssa->table, leftover) {
-		printf("Leftover\n");
-		EMIT(fmov, (uintptr_t) leftover->key, blank_alu_src, (uintptr_t) leftover->data, true, midgard_outmod_none);
-	}
-#endif
 }
 
 static void
 actualise_ssa_to_alias(compiler_context *ctx)
 {
 	util_dynarray_foreach(&ctx->current_block, midgard_instruction, ins) {
-		map_ssa_to_alias(ctx->ssa_to_alias, &ins->ssa_args.src0);
-		map_ssa_to_alias(ctx->ssa_to_alias, &ins->ssa_args.src1);
+		map_ssa_to_alias(ctx, &ins->ssa_args.src0);
+		map_ssa_to_alias(ctx, &ins->ssa_args.src1);
 	}
 
 	emit_leftover_move(ctx);
@@ -1133,16 +1127,11 @@ static void
 actualise_register_to_ssa(compiler_context *ctx)
 {
 	util_dynarray_foreach(&ctx->current_block, midgard_instruction, ins) {
-		printf("Pit: %d\n", ins->ssa_args.dest);
 		int reg = _mesa_hash_table_u64_search(ctx->register_to_ssa, ins->ssa_args.dest);
 
 		if (reg) {
 			ins->ssa_args.dest = reg - 1;
 			ins->ssa_args.literal_out = true;
-			printf("gotcha\n");
-
-			/* Destination can only exist once */
-	//		_mesa_hash_table_u64_remove(ctx->register_to_ssa, ins->ssa_args.dest);
 		}
 	}
 }
