@@ -313,7 +313,21 @@ typedef struct compiler_context {
 	/* List of midgard_instructions emitted for the current block */
 	struct util_dynarray current_block;
 
+	/* Constants which have been loaded, for later inlining */
 	struct hash_table_u64 *ssa_constants;
+
+	/* SSA values / registers which have been aliased. Naively, these
+	 * demand a fmov output; instead, we alias them in a later pass to
+	 * avoid the wasted op.
+	 *
+	 * A note on encoding: to avoid dynamic memory management here, rather
+	 * than ampping to a pointer, we map to a uintptr_t where the lower
+	 * 30-bits are the source SSA/register index, the, next bit is the
+	 * source literal flag, highest bit is the destination literal flag.
+	 * This fits snugly into the 32-bit word. The key itself is just the
+	 * destination index. */
+
+	struct hash_table_u64 *ssa_aliases;
 } compiler_context;
 
 static int
@@ -362,6 +376,16 @@ optimise_nir(nir_shader *nir)
 	} while(progress);
 
 	NIR_PASS(progress, nir, nir_lower_to_source_mods);
+}
+
+/* Alias the SSA slots, merely by inserting the flag in the ssa_aliases hash
+ * table. See the comments in compiler_context */
+
+static void
+alias_ssa(compiler_context *ctx, int dest, int src, bool literal_dest, bool literal_src)
+{
+	int v = (literal_dest << 31) | (literal_src << 30) | src;
+	_mesa_hash_table_u64_insert(ctx->ssa_aliases, dest, (uintptr_t) v);
 }
 
 static void
@@ -629,10 +653,12 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 
 				int reg_slot = 23 - offset;
 				
-				/* Uniform accesses are 0-cycle, but that's
-				 * abstract, so we emit a fmov that will get
-				 * inlined */
-				EMIT(fmov, reg_slot, blank_alu_src, reg, false, midgard_outmod_none);
+				/* Uniform accesses are 0-cycle, since they're
+				 * just a register fetch in the usual case. So,
+				 * we alias the registers while we're still in
+				 * SSA-space */
+
+				alias_ssa(ctx, reg, reg_slot, false, true);
 			} else if (ctx->stage == MESA_SHADER_FRAGMENT) {
 				/* XXX: Half-floats? */
 				/* TODO: swizzle, mask, decode unknown */
@@ -671,7 +697,7 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				 * framebuffer writeout dance. TODO: Defer
 				 * writes */
 
-				EMIT(fmov, reg, blank_alu_src, 0, true, midgard_outmod_none);
+				alias_ssa(ctx, 0, reg, true, false);
 			} else {
 				printf("Unknown store\n");
 				util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32(reg, offset));
@@ -1065,6 +1091,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 		nir_foreach_block(block, func->impl) {
 			util_dynarray_init(&ctx->current_block, NULL);
 			ctx->ssa_constants = _mesa_hash_table_u64_create(NULL); 
+			ctx->ssa_aliases = _mesa_hash_table_u64_create(NULL); 
 
 			nir_foreach_instr(instr, block) {
 				emit_instr(ctx, instr);
