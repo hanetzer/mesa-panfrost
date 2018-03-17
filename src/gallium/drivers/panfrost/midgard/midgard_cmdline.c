@@ -321,13 +321,13 @@ typedef struct compiler_context {
 	 * avoid the wasted op.
 	 *
 	 * A note on encoding: to avoid dynamic memory management here, rather
-	 * than ampping to a pointer, we map to a uintptr_t where the lower
-	 * 30-bits are the source SSA/register index, the, next bit is the
-	 * source literal flag, highest bit is the destination literal flag.
-	 * This fits snugly into the 32-bit word. The key itself is just the
-	 * destination index. */
+	 * than ampping to a pointer, we map to the source index; the key
+	 * itself is just the destination index. */
 
-	struct hash_table_u64 *ssa_aliases;
+	struct hash_table_u64 *ssa_to_alias;
+	
+	/* Encoded the same as ssa_to_alias, except now it's mapping SSA source indicdes as the keys to fixed destination registers as the values */
+	struct hash_table_u64 *register_to_ssa;
 } compiler_context;
 
 static int
@@ -368,24 +368,30 @@ optimise_nir(nir_shader *nir)
 		NIR_PASS(progress, nir, nir_opt_peephole_select, 8);
 		NIR_PASS(progress, nir, nir_opt_algebraic);
 		NIR_PASS(progress, nir, nir_opt_constant_folding);
-		//NIR_PASS(progress, nir, nir_opt_undef);
+		NIR_PASS(progress, nir, nir_opt_undef);
 		NIR_PASS(progress, nir, nir_opt_loop_unroll, 
 				nir_var_shader_in |
 				nir_var_shader_out |
 				nir_var_local);
 	} while(progress);
+	printf("---\n");
 
 	NIR_PASS(progress, nir, nir_lower_to_source_mods);
+	NIR_PASS(progress, nir, nir_copy_prop);
+	NIR_PASS(progress, nir, nir_opt_dce);
 }
 
-/* Alias the SSA slots, merely by inserting the flag in the ssa_aliases hash
- * table. See the comments in compiler_context */
+/* Front-half of aliasing the SSA slots, merely by inserting the flag in the
+ * appropriate hash table. See the comments in compiler_context */
 
 static void
-alias_ssa(compiler_context *ctx, int dest, int src, bool literal_dest, bool literal_src)
+alias_ssa(compiler_context *ctx, int dest, int src, bool literal_dest)
 {
-	int v = (literal_dest << 31) | (literal_src << 30) | src;
-	_mesa_hash_table_u64_insert(ctx->ssa_aliases, dest, (uintptr_t) v);
+	printf("%d->%d\n", src, dest);
+	if (literal_dest)
+		_mesa_hash_table_u64_insert(ctx->register_to_ssa, src, (uintptr_t) dest + 1);
+	else
+		_mesa_hash_table_u64_insert(ctx->ssa_to_alias, dest, (uintptr_t) src + 1);
 }
 
 static void
@@ -658,7 +664,7 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				 * we alias the registers while we're still in
 				 * SSA-space */
 
-				alias_ssa(ctx, reg, reg_slot, false, true);
+				alias_ssa(ctx, reg, SSA_FIXED_REGISTER(reg_slot), false);
 			} else if (ctx->stage == MESA_SHADER_FRAGMENT) {
 				/* XXX: Half-floats? */
 				/* TODO: swizzle, mask, decode unknown */
@@ -697,7 +703,7 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				 * framebuffer writeout dance. TODO: Defer
 				 * writes */
 
-				alias_ssa(ctx, 0, reg, true, false);
+				alias_ssa(ctx, 0, reg, true);
 			} else {
 				printf("Unknown store\n");
 				util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32(reg, offset));
@@ -1060,6 +1066,44 @@ eliminate_constant_mov(compiler_context *ctx)
 	}
 }
 
+/* Map normal SSA sources to other SSA sources / fixed registers (like
+ * uniforms) */
+
+static void
+map_ssa_to_alias(struct hash_table_u64 *ssa_to_alias, int *ref)
+{
+	uintptr_t alias = _mesa_hash_table_u64_search(ssa_to_alias, *ref);
+	
+	if (alias)
+		*ref = alias;
+}
+
+static void
+actualise_ssa_to_alias(compiler_context *ctx)
+{
+	util_dynarray_foreach(&ctx->current_block, midgard_instruction, ins) {
+		map_ssa_to_alias(ctx->ssa_to_alias, ins->ssa_args.src0);
+		map_ssa_to_alias(ctx->ssa_to_alias, ins->ssa_args.src1);
+	}
+}
+
+/* Sort of opposite of the above */
+
+static void
+actualise_register_to_ssa(compiler_context *ctx)
+{
+	util_dynarray_foreach(&ctx->current_block, midgard_instruction, ins) {
+		printf("Pit: %d\n", ins->ssa_args.dest);
+		int reg = _mesa_hash_table_u64_search(ctx->register_to_ssa, ins->ssa_args.dest);
+
+		if (reg) {
+			printf("Pot\n");
+			ins->ssa_args.dest = reg - 1;
+			ins->ssa_args.literal_out = true;
+		}
+	}
+}
+
 static void
 emit_fragment_epilogue(compiler_context *ctx)
 {
@@ -1091,7 +1135,8 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 		nir_foreach_block(block, func->impl) {
 			util_dynarray_init(&ctx->current_block, NULL);
 			ctx->ssa_constants = _mesa_hash_table_u64_create(NULL); 
-			ctx->ssa_aliases = _mesa_hash_table_u64_create(NULL); 
+			ctx->ssa_to_alias = _mesa_hash_table_u64_create(NULL); 
+			ctx->register_to_ssa = _mesa_hash_table_u64_create(NULL); 
 
 			nir_foreach_instr(instr, block) {
 				emit_instr(ctx, instr);
@@ -1101,6 +1146,9 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 			/* Artefact of load_const, etc in the average case */
 			eliminate_constant_mov(ctx);
+
+			/* Perform heavylifting for aliasing */
+			actualise_register_to_ssa(ctx);
 
 			/* Append fragment shader epilogue (value writeout) */
 			if (ctx->stage == MESA_SHADER_FRAGMENT)

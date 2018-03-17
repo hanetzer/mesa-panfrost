@@ -282,6 +282,10 @@ __attribute__((__packed__))
 #define SSA_UNUSED_0 0
 #define SSA_UNUSED_1 -2
 
+#define SSA_FIXED_SHIFT 24
+#define SSA_FIXED_REGISTER(reg) ((1 + reg) << SSA_FIXED_SHIFT)
+#define SSA_FIXED_MINIMUM SSA_FIXED_REGISTER(0)
+
 /* Swizzle support */
 
 #define SWIZZLE(A, B, C, D) ((D << 6) | (C << 4) | (B << 2) | (A << 0))
