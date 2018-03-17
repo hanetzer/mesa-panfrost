@@ -387,7 +387,6 @@ optimise_nir(nir_shader *nir)
 static void
 alias_ssa(compiler_context *ctx, int dest, int src, bool literal_dest)
 {
-	printf("%d->%d\n", src, dest);
 	if (literal_dest)
 		_mesa_hash_table_u64_insert(ctx->register_to_ssa, src, (uintptr_t) dest + 1);
 	else
@@ -750,7 +749,8 @@ emit_instr(compiler_context *ctx, struct nir_instr *instr)
 static int
 dealias_register(int reg)
 {
-	/* Not an alias */
+	if (reg >= SSA_FIXED_MINIMUM)
+		return SSA_REG_FROM_FIXED(reg);
 
 	if (reg >= 0)
 		return reg;
@@ -1036,9 +1036,12 @@ eliminate_constant_mov(compiler_context *ctx)
 		if (move->vector && move->vector_alu.op != midgard_alu_op_fmov) continue;
 		if (!move->vector && move->scalar_alu.op != midgard_alu_op_fmov) continue;
 
-		/* If this is a literal move (used in tandem with I/O), it cannot be removed */
+		/* If this is a literal move (used in tandem with I/O), it
+		 * cannot be removed. Similarly, if it -will- be a literal move
+		 * based on register_to_ssa, it cannot be removed. */
 		
 		if (move->ssa_args.literal_out) continue;
+		if (_mesa_hash_table_u64_search(ctx->register_to_ssa, move->ssa_args.dest)) continue;
 
 		unsigned target_reg = move->ssa_args.dest;
 
@@ -1082,8 +1085,8 @@ static void
 actualise_ssa_to_alias(compiler_context *ctx)
 {
 	util_dynarray_foreach(&ctx->current_block, midgard_instruction, ins) {
-		map_ssa_to_alias(ctx->ssa_to_alias, ins->ssa_args.src0);
-		map_ssa_to_alias(ctx->ssa_to_alias, ins->ssa_args.src1);
+		map_ssa_to_alias(ctx->ssa_to_alias, &ins->ssa_args.src0);
+		map_ssa_to_alias(ctx->ssa_to_alias, &ins->ssa_args.src1);
 	}
 }
 
@@ -1148,6 +1151,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 			eliminate_constant_mov(ctx);
 
 			/* Perform heavylifting for aliasing */
+			actualise_ssa_to_alias(ctx);
 			actualise_register_to_ssa(ctx);
 
 			/* Append fragment shader epilogue (value writeout) */
