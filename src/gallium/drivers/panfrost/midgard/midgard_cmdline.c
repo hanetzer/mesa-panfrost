@@ -52,6 +52,10 @@ typedef struct {
 	/* The output is -not- SSA -- it's a direct register from I/O -- and
 	 * must not be culled/renamed */
 	bool literal_out;
+
+	/* src1 is -not- SSA but instead a 16-bit inline constant to be smudged
+	 * in. Only valid for ALU ops. */
+	bool inline_constant;
 } ssa_args;
 
 /* Generic in-memory data type repesenting a single logical instruction, rather
@@ -546,7 +550,8 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		.ssa_args = {
 			.src0 = components == 2 || components == 0 ? src0 : SSA_UNUSED_1,
 			.src1 = components == 2 ? src1 : components == 1 ? src0 : SSA_UNUSED_0,
-			.dest = dest
+			.dest = dest,
+			.inline_constant = components == 0
 		},
 		.vector = is_vector
 	};
@@ -739,7 +744,14 @@ allocate_registers(compiler_context *ctx)
 			case TAG_ALU_4:
 				ins->registers.output_reg = args.dest;
 				ins->registers.input1_reg = dealias_register(args.src0);
-				ins->registers.input2_reg = dealias_register(args.src1);
+
+				ins->registers.inline_2 = args.inline_constant;
+
+				if (args.inline_constant && args.src1 != 0) {
+					printf("TODO: Encode inline constant %d\n", args.src1);
+				} else {
+					ins->registers.input2_reg = dealias_register(args.src1);
+				}
 
 				break;
 			
@@ -824,12 +836,13 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					body_size[body_words_count] = sizeof(midgard_scalar_alu_t);
 					memcpy(&body_words[body_words_count++], &ains->scalar_alu, sizeof(ains->scalar_alu));
 					bytes_emitted += sizeof(midgard_scalar_alu_t);
+
+					/* TODO: Emit pipeline registers and batch instructions once we know how XXX */
+					break;
 				}
 
 				++index;
 
-				/* TODO: Emit pipeline registers and batch instructions once we know how XXX */
-				break;
 			}
 
 			/* Bubble up the number of instructions for skipping */

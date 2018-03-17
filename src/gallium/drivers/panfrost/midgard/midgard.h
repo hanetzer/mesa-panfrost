@@ -276,9 +276,10 @@ __attribute__((__packed__))
 #define REGISTER_TEXTURE_2 29
 #define REGISTER_SELECT  31
 
-/* SSA helper aliases to mimic the registers */
+/* SSA helper aliases to mimic the registers. UNUSED_0 encoded as an inline
+ * constant. UNUSED_1 encoded as REGISTER_UNUSED */
 
-#define SSA_UNUSED_0 -1
+#define SSA_UNUSED_0 0
 #define SSA_UNUSED_1 -2
 
 /* Swizzle support */
