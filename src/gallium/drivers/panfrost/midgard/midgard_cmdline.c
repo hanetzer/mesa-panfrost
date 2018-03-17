@@ -845,11 +845,12 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 			/* TODO: Constant combining */
 			int index = 0, last_unit = 0;
 
-			while ((ins + index) &&
-				(ins + index)->type == TAG_ALU_4 &&
-			       	(ins + index)->unit > last_unit) {
+			while (ins + index) {
+				midgard_instruction *ains = ins + (index++);
 
-				midgard_instruction *ains = ins + index;
+				/* Ensure that the chain can continue */
+				if (ains->unused) continue;
+				if (ains->type != TAG_ALU_4 || ains->unit <= last_unit) break;
 
 				control |= ains->unit;
 				last_unit = ains->unit;
@@ -861,7 +862,6 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					body_size[body_words_count] = sizeof(midgard_vector_alu_t);
 					memcpy(&body_words[body_words_count++], &ains->vector_alu, sizeof(ains->vector_alu));
 					bytes_emitted += sizeof(midgard_vector_alu_t);
-
 				} else if (ains->compact_branch) {
 					body_size[body_words_count] = sizeof(ains->br_compact);
 					memcpy(&body_words[body_words_count++], &ains->br_compact, sizeof(ains->br_compact));
@@ -879,9 +879,6 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					/* TODO: Emit pipeline registers and batch instructions once we know how XXX */
 					break;
 				}
-
-				++index;
-
 			}
 
 			/* Bubble up the number of instructions for skipping */
