@@ -38,6 +38,7 @@
 #include "compiler/glsl/glsl_to_nir.h"
 #include "compiler/nir_types.h"
 #include "main/imports.h"
+#include "compiler/nir/nir_builder.h"
 
 #include "midgard.h"
 
@@ -1162,7 +1163,9 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 	compiler_context *ctx = &ictx;
 
-	optimise_nir(nir);
+	/* Run initial optimisation pass */
+	//optimise_nir(nir);
+
 	nir_print_shader(nir, stdout);
 
 	nir_foreach_function(func, nir) {
@@ -1255,6 +1258,41 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 }
 
 static void
+append_vertex_epilogue_func(nir_function_impl *impl)
+{
+	nir_builder b;
+
+	nir_builder_init(&b, impl);
+	b.cursor = nir_after_cf_list(&impl->body);
+
+	nir_intrinsic_instr *store;
+
+	store = nir_intrinsic_instr_create(b.shader, nir_intrinsic_store_output);
+	store->num_components = 4;
+	nir_intrinsic_set_base(store, /* out->data.driver_location */ 0);
+	nir_intrinsic_set_write_mask(store, 0xf);
+	store->src[0].ssa = nir_vec4(&b, 
+			nir_imm_float(&b, 0.1f), 
+			nir_imm_float(&b, 0.1f), 
+			nir_imm_float(&b, 0.1f), 
+			nir_imm_float(&b, 0.1f));
+	store->src[0].is_ssa = true;
+	store->src[1] = nir_src_for_ssa(nir_imm_int(&b, 0));
+	nir_builder_instr_insert(&b, &store->instr);
+}
+
+static void
+append_vertex_epilogue(nir_shader *shader)
+{
+	nir_foreach_function(func, shader) {
+		if (!strcmp(func->name, "main")) {
+			append_vertex_epilogue_func(func->impl);
+		}
+	}
+
+}
+
+static void
 finalise_to_disk(const char *filename, struct util_dynarray *data)
 {
 	FILE *fp;
@@ -1306,6 +1344,7 @@ int main(int argc, char **argv)
 	struct util_dynarray compiled;
 
 	nir = glsl_to_nir(prog, MESA_SHADER_VERTEX, &nir_options);
+	append_vertex_epilogue(nir);
 	midgard_compile_shader_nir(nir, &compiled);
 	finalise_to_disk("/dev/shm/vertex.bin", &compiled);
 
