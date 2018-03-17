@@ -1040,7 +1040,6 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 	compiler_context *ctx = &ictx;
 
-	nir_print_shader(nir, stdout);
 	optimise_nir(nir);
 	nir_print_shader(nir, stdout);
 
@@ -1182,11 +1181,9 @@ int main(int argc, char **argv)
 
 	struct util_dynarray compiled;
 
-#if 0
 	nir = glsl_to_nir(prog, MESA_SHADER_VERTEX, &nir_options);
 	midgard_compile_shader_nir(nir, &compiled);
 	finalise_to_disk("/dev/shm/vertex.bin", &compiled);
-#endif
 
 	nir = glsl_to_nir(prog, MESA_SHADER_FRAGMENT, &nir_options);
 	midgard_compile_shader_nir(nir, &compiled);
