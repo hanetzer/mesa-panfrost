@@ -327,6 +327,8 @@ optimise_nir(nir_shader *nir)
 {
 	bool progress;
 
+	nir_assign_var_locations(&nir->outputs, &nir->num_outputs, glsl_type_size);
+	nir_assign_var_locations(&nir->inputs, &nir->num_inputs, glsl_type_size);
 
 	//NIR_PASS_V(nir, nir_lower_io_to_temporaries, nir_shader_get_entrypoint(nir), true, true);
 	//NIR_PASS(progress, nir, nir_opt_global_to_local);
