@@ -325,6 +325,7 @@ typedef struct compiler_context {
 	 * itself is just the destination index. */
 
 	struct hash_table_u64 *ssa_to_alias;
+	struct set *leftover_ssa_to_alias;
 	
 	/* Encoded the same as ssa_to_alias, except now it's mapping SSA source indicdes as the keys to fixed destination registers as the values */
 	struct hash_table_u64 *register_to_ssa;
@@ -387,10 +388,13 @@ optimise_nir(nir_shader *nir)
 static void
 alias_ssa(compiler_context *ctx, int dest, int src, bool literal_dest)
 {
-	if (literal_dest)
+	if (literal_dest) {
 		_mesa_hash_table_u64_insert(ctx->register_to_ssa, src, (uintptr_t) dest + 1);
-	else
+	} else {
+		printf("Alias %d->%d\n", src, dest);
 		_mesa_hash_table_u64_insert(ctx->ssa_to_alias, dest, (uintptr_t) src + 1);
+		_mesa_set_add(ctx->leftover_ssa_to_alias, dest);
+	}
 }
 
 static void
@@ -749,8 +753,11 @@ emit_instr(compiler_context *ctx, struct nir_instr *instr)
 static int
 dealias_register(int reg)
 {
-	if (reg >= SSA_FIXED_MINIMUM)
+	printf("Da %d\n", reg);
+	if (reg >= SSA_FIXED_MINIMUM) {
+		printf("Dealias\n");
 		return SSA_REG_FROM_FIXED(reg);
+	}
 
 	if (reg >= 0)
 		return reg;
@@ -777,7 +784,7 @@ allocate_registers(compiler_context *ctx)
 
 		switch (ins->type) {
 			case TAG_ALU_4:
-				ins->registers.output_reg = args.dest;
+				ins->registers.output_reg = dealias_register(args.dest);
 				ins->registers.input1_reg = dealias_register(args.src0);
 
 				ins->registers.inline_2 = args.inline_constant;
@@ -1081,6 +1088,34 @@ map_ssa_to_alias(struct hash_table_u64 *ssa_to_alias, int *ref)
 		*ref = alias;
 }
 
+/* If there are leftovers after the below pass, emit actual fmov
+ * instructions for the slow-but-correct path */
+
+static void
+emit_leftover_move(compiler_context *ctx)
+{
+	struct set_entry *leftover;
+	printf("emit\n");
+
+	set_foreach(ctx->leftover_ssa_to_alias, leftover) {
+		int base = (uintptr_t) leftover->key;
+		int mapped = base;
+		map_ssa_to_alias(ctx->ssa_to_alias, &mapped);
+		printf("Leftover %d->%d\n", base, mapped);
+
+		EMIT(fmov, mapped, blank_alu_src, base, false, midgard_outmod_none);
+	}
+
+#if 0
+	printf("entry %p\n", _mesa_hash_table_next_entry(ctx->ssa_to_alias->table, NULL));
+
+	hash_table_foreach(ctx->register_to_ssa->table, leftover) {
+		printf("Leftover\n");
+		EMIT(fmov, (uintptr_t) leftover->key, blank_alu_src, (uintptr_t) leftover->data, true, midgard_outmod_none);
+	}
+#endif
+}
+
 static void
 actualise_ssa_to_alias(compiler_context *ctx)
 {
@@ -1088,6 +1123,8 @@ actualise_ssa_to_alias(compiler_context *ctx)
 		map_ssa_to_alias(ctx->ssa_to_alias, &ins->ssa_args.src0);
 		map_ssa_to_alias(ctx->ssa_to_alias, &ins->ssa_args.src1);
 	}
+
+	emit_leftover_move(ctx);
 }
 
 /* Sort of opposite of the above */
@@ -1100,9 +1137,12 @@ actualise_register_to_ssa(compiler_context *ctx)
 		int reg = _mesa_hash_table_u64_search(ctx->register_to_ssa, ins->ssa_args.dest);
 
 		if (reg) {
-			printf("Pot\n");
 			ins->ssa_args.dest = reg - 1;
 			ins->ssa_args.literal_out = true;
+			printf("gotcha\n");
+
+			/* Destination can only exist once */
+	//		_mesa_hash_table_u64_remove(ctx->register_to_ssa, ins->ssa_args.dest);
 		}
 	}
 }
@@ -1140,6 +1180,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 			ctx->ssa_constants = _mesa_hash_table_u64_create(NULL); 
 			ctx->ssa_to_alias = _mesa_hash_table_u64_create(NULL); 
 			ctx->register_to_ssa = _mesa_hash_table_u64_create(NULL); 
+			ctx->leftover_ssa_to_alias = _mesa_set_create(NULL, _mesa_hash_pointer, _mesa_key_pointer_equal);
 
 			nir_foreach_instr(instr, block) {
 				emit_instr(ctx, instr);
