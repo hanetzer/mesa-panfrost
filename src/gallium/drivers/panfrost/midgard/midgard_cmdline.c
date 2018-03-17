@@ -1031,6 +1031,18 @@ eliminate_constant_mov(compiler_context *ctx)
 	}
 }
 
+static void
+emit_fragment_epilogue(compiler_context *ctx)
+{
+	EMIT(alu_br_compact_cond, midgard_jmp_writeout_op_writeout, TAG_ALU_4, 0, COND_FBWRITE);
+
+	/* Errata workaround -- the above write can sometimes
+	 * fail -.- */
+
+	EMIT(fmov, 0, blank_alu_src, 0, true, midgard_outmod_none);
+	EMIT(alu_br_compact_cond, midgard_jmp_writeout_op_writeout, TAG_ALU_4, -1, COND_FBWRITE);
+}
+
 static int
 midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 {
@@ -1061,13 +1073,8 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 			eliminate_constant_mov(ctx);
 
 			/* Append fragment shader epilogue (value writeout) */
-			EMIT(alu_br_compact_cond, midgard_jmp_writeout_op_writeout, TAG_ALU_4, 0, COND_FBWRITE);
-
-			/* Errata workaround -- the above write can sometimes
-			 * fail -.- */
-
-			EMIT(fmov, 0, blank_alu_src, 0, true, midgard_outmod_none);
-			EMIT(alu_br_compact_cond, midgard_jmp_writeout_op_writeout, TAG_ALU_4, -1, COND_FBWRITE);
+			if (ctx->stage == MESA_SHADER_FRAGMENT)
+				emit_fragment_epilogue(ctx);
 
 			/* Finally, register allocation! Must be done after everything else */
 			allocate_registers(ctx);
