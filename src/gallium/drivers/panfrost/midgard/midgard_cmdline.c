@@ -631,8 +631,6 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				 * abstract, so we emit a fmov that will get
 				 * inlined */
 				EMIT(fmov, reg_slot, blank_alu_src, reg, false, midgard_outmod_none);
-
-				break;
 			} else if (ctx->stage == MESA_SHADER_FRAGMENT) {
 				/* XXX: Half-floats? */
 				/* TODO: swizzle, mask, decode unknown */
@@ -640,14 +638,18 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				midgard_instruction ins = m_load_vary_32(reg, offset);
 				ins.load_store.unknown = 0xA01E9E; /* XXX: What is this? */
 				util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
+			} else if(ctx->stage == MESA_SHADER_VERTEX) {
+				midgard_instruction ins = m_load_attr_32(reg, offset);
+				ins.load_store.unknown = 0x1E1E; /* XXX: What is this? */
+				util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
+			} else {
+				printf("Unknown load\n");
 
-				break;
+				/* Worst case, emit a load varying and at least
+				 * that'll show up in the disassembly */
+
+				util_dynarray_append(&ctx->current_block, midgard_instruction, m_load_vary_32(reg, 0));
 			}
-
-			/* Worst case, emit a load varying and at least
-			 * that'll show up in the disassembly */
-
-			util_dynarray_append(&ctx->current_block, midgard_instruction, m_load_vary_32(reg, 0));
 
 			break;
 
@@ -668,11 +670,10 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				 * writes */
 
 				EMIT(fmov, reg, blank_alu_src, 0, true, midgard_outmod_none);
-				break;
+			} else {
+				printf("Unknown store\n");
+				util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32(reg, offset));
 			}
-
-
-			util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32(reg, offset));
 
 			break;
 
