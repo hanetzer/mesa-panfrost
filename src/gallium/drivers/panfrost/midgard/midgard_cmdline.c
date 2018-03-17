@@ -695,7 +695,7 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			assert(const_offset && "no indirect outputs");
 
 			offset = nir_intrinsic_base(instr) + const_offset->u32[0];
-			offset = offset * 4 + nir_intrinsic_component(instr);
+			offset = offset * 2 + (nir_intrinsic_component(instr) / 2);
 
 			reg = instr->src[0].ssa->index;
 
@@ -707,6 +707,10 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				 * writes */
 
 				alias_ssa(ctx, 0, reg, true);
+			} else if (ctx->stage == MESA_SHADER_VERTEX) {
+				midgard_instruction ins = m_store_vary_32(reg, offset);
+				ins.load_store.unknown = 0x1E9E; /* XXX: What is this? */
+				util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 			} else {
 				printf("Unknown store\n");
 				util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32(reg, offset));
