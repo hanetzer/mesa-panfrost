@@ -383,16 +383,17 @@ optimise_nir(nir_shader *nir)
 }
 
 /* Front-half of aliasing the SSA slots, merely by inserting the flag in the
- * appropriate hash table. See the comments in compiler_context */
+ * appropriate hash table. Intentional off-by-one to avoid confusing NULL with
+ * r0. See the comments in compiler_context */
 
 static void
 alias_ssa(compiler_context *ctx, int dest, int src, bool literal_dest)
 {
 	if (literal_dest) {
-		_mesa_hash_table_u64_insert(ctx->register_to_ssa, src, (uintptr_t) dest + 1);
+		_mesa_hash_table_u64_insert(ctx->register_to_ssa, src, (void *) (uintptr_t) dest + 1);
 	} else {
-		_mesa_hash_table_u64_insert(ctx->ssa_to_alias, dest, (uintptr_t) src + 1);
-		_mesa_set_add(ctx->leftover_ssa_to_alias, dest);
+		_mesa_hash_table_u64_insert(ctx->ssa_to_alias, dest, (void *) (uintptr_t) src + 1);
+		_mesa_set_add(ctx->leftover_ssa_to_alias, (void *) (uintptr_t) dest);
 	}
 }
 
@@ -1083,7 +1084,7 @@ map_ssa_to_alias(compiler_context *ctx, int *ref)
 	if (alias) {
 		/* Remove entry in leftovers to avoid a redunant fmov */
 
-		struct set_entry *leftover = _mesa_set_search(ctx->leftover_ssa_to_alias, (uintptr_t) *ref);
+		struct set_entry *leftover = _mesa_set_search(ctx->leftover_ssa_to_alias, (void *) (uintptr_t) *ref);
 
 		if (leftover)
 			_mesa_set_remove(ctx->leftover_ssa_to_alias, leftover);
@@ -1127,7 +1128,7 @@ static void
 actualise_register_to_ssa(compiler_context *ctx)
 {
 	util_dynarray_foreach(&ctx->current_block, midgard_instruction, ins) {
-		int reg = _mesa_hash_table_u64_search(ctx->register_to_ssa, ins->ssa_args.dest);
+		uintptr_t reg = (uintptr_t) _mesa_hash_table_u64_search(ctx->register_to_ssa, ins->ssa_args.dest);
 
 		if (reg) {
 			ins->ssa_args.dest = reg - 1;
