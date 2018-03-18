@@ -1105,7 +1105,15 @@ map_ssa_to_alias(compiler_context *ctx, int *ref)
 			_mesa_set_remove(ctx->leftover_ssa_to_alias, leftover);
 
 		/* Assign the alias map */
-		*ref = alias;
+		*ref = alias - 1;
+		return;
+	}
+
+	alias = _mesa_hash_table_u64_search(ctx->register_to_ssa, *ref);
+
+	if (alias) {
+		*ref = alias - 1;
+		return;
 	}
 }
 
