@@ -356,8 +356,8 @@ optimise_nir(nir_shader *nir)
 
 		NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
 		NIR_PASS(progress, nir, nir_lower_var_copies);
-
 		NIR_PASS(progress, nir, nir_lower_vars_to_ssa);
+
 		//NIR_PASS(progress, nir, nir_lower_vec_to_movs);
 		NIR_PASS(progress, nir, nir_copy_prop);
 		NIR_PASS(progress, nir, nir_opt_remove_phis);
@@ -1199,21 +1199,8 @@ skip:
 /* Shader epilogues */
 
 static void
-emit_vertex_epilogue(nir_builder *b, int position)
+emit_vertex_epilogue(nir_builder *b, nir_ssa_def *input_point)
 {
-	/* First, load the final gl_Position as written to the imaginary varying */
-
-	nir_intrinsic_instr *load;
-	load = nir_intrinsic_instr_create(b->shader, nir_intrinsic_load_output);
-	load->num_components = 4;
-	nir_intrinsic_set_base(load, position);
-	load->src[0] = nir_src_for_ssa(nir_imm_int(b, 0));
-	nir_ssa_dest_init(&load->instr, &load->dest, 4, 32, NULL);
-	nir_builder_instr_insert(b, &load->instr);
-
-	nir_ssa_def *input_point = &load->dest.ssa;
-
-	/* Next, apply the actual transformations. */
 	/* TODO: Don't assume 400x240 screen, nor 0.5, nor NDC input */
 	nir_ssa_def *window = nir_vec4(b, nir_imm_float(b, 200.0f), nir_imm_float(b, 120.0f), nir_imm_float(b, 0.5f), nir_imm_float(b, 0.0));
 	nir_ssa_def *persp = nir_vec4(b, nir_imm_float(b, 0), nir_imm_float(b, 0), nir_imm_float(b, 0), nir_imm_float(b, 1.0));
@@ -1233,40 +1220,84 @@ emit_vertex_epilogue(nir_builder *b, int position)
 	nir_builder_instr_insert(b, &store->instr);
 }
 
-static void
-append_vertex_epilogue_func(nir_function_impl *impl, int position)
+/* XXX: From nir_lower_clip.c, genericise the code before merging XXX FIXME */
+static nir_ssa_def *
+find_output_in_block(nir_block *block, unsigned drvloc)
 {
-	nir_builder b;
+   nir_foreach_instr(instr, block) {
 
-	nir_builder_init(&b, impl);
-	b.cursor = nir_after_cf_list(&impl->body);
-	emit_vertex_epilogue(&b, position);
+      if (instr->type == nir_instr_type_intrinsic) {
+         nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+         if ((intr->intrinsic == nir_intrinsic_store_output) &&
+             nir_intrinsic_base(intr) == drvloc) {
+            assert(intr->src[0].is_ssa);
+            assert(nir_src_as_const_value(intr->src[1]));
+            return intr->src[0].ssa;
+         }
+      }
+   }
+
+   return NULL;
+}
+
+/* TODO: maybe this would be a useful helper?
+ * NOTE: assumes each output is written exactly once (and unconditionally)
+ * so if needed nir_lower_outputs_to_temporaries()
+ */
+static nir_ssa_def *
+find_output(nir_shader *shader, unsigned drvloc)
+{
+	printf("Finding %d\n", drvloc);
+   nir_ssa_def *def = NULL;
+   nir_foreach_function(function, shader) {
+      if (function->impl) {
+         nir_foreach_block_reverse(block, function->impl) {
+            nir_ssa_def *new_def = find_output_in_block(block, drvloc);
+            assert(!(new_def && def));
+            def = new_def;
+#if !defined(DEBUG)
+            /* for debug builds, scan entire shader to assert
+             * if output is written multiple times.  For release
+             * builds just assume all is well and bail when we
+             * find first:
+             */
+            if (def)
+               break;
+#endif
+         }
+      }
+   }
+
+   return def;
 }
 
 static void
 append_vertex_epilogue(nir_shader *shader)
 {
-	int gl_Position_loc = -1;
+	nir_ssa_def *gl_Position;
 
 	/* First, find gl_Position for later pass */
 
 	nir_foreach_variable(var, &shader->outputs) {
 		if (var->data.location == VARYING_SLOT_POS)
-			gl_Position_loc = var->data.driver_location;
+			gl_Position = find_output(shader, var->data.driver_location);
 	}
 
-	printf("pos %d\n", gl_Position_loc);
-
-	if (gl_Position_loc == -1)
-		printf("gl_Position not set?\n");
-
+	if (!gl_Position) {
+		printf("gl_Position not written in vertex shader\n");
+		return;
+	}
 
 	nir_foreach_function(func, shader) {
-		if (!strcmp(func->name, "main"))
-			append_vertex_epilogue_func(func->impl, gl_Position_loc);
+		if (!strcmp(func->name, "main")) {
+			nir_builder b;
+
+			nir_builder_init(&b, func->impl);
+			b.cursor = nir_after_cf_list(&func->impl->body);
+			emit_vertex_epilogue(&b, gl_Position);
+		}
 	}
 }
-
 
 
 static void
@@ -1293,6 +1324,13 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 	/* Assign var locations early, so the epilogue can use them if necessary */
 	nir_assign_var_locations(&nir->outputs, &nir->num_outputs, glsl_type_size);
 	nir_assign_var_locations(&nir->inputs, &nir->num_inputs, glsl_type_size);
+
+	/* Lower I/O before the vertex epilogue as well */
+	bool progress;
+	NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
+	NIR_PASS(progress, nir, nir_lower_var_copies);
+	NIR_PASS(progress, nir, nir_lower_vars_to_ssa);
+	NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
 
 	/* Append vertex epilogue before optimisation, so the epilogue itself
 	 * is optimised */
