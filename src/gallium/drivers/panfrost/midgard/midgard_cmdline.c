@@ -1160,6 +1160,35 @@ actualise_register_to_ssa(compiler_context *ctx)
 	}
 }
 
+/* At least for storing the end gl_Position, there appears to be a hardware
+ * quirk that stores must be at the end. This pass, intended to occur right
+ * after Midgard instruction emission, defer them to the end. It must be run
+ * while the code is still in SSA form, to avoid conflicts with the RA. */
+
+static void
+defer_stores(compiler_context *ctx)
+{
+	/* As we are appending mid foreach, break out at end */
+	int cap = ctx->current_block.size / sizeof(midgard_instruction);
+
+	util_dynarray_foreach(&ctx->current_block, midgard_instruction, store) {
+		/* Search for stores */
+
+		if (store->type != TAG_LOAD_STORE_4) goto skip;
+		if (!OP_IS_STORE(store->load_store.op)) goto skip;
+
+		/* Splice out the instruction and move to the end of stream*/
+
+		util_dynarray_append(&ctx->current_block, midgard_instruction, *store);
+		store->unused = true;
+
+		/* Check for maximum condition */
+skip:
+		cap--;
+		if (!cap) break;
+	}
+}
+
 static void
 emit_fragment_epilogue(compiler_context *ctx)
 {
@@ -1198,6 +1227,8 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 			nir_foreach_instr(instr, block) {
 				emit_instr(ctx, instr);
 			}
+
+			defer_stores(ctx);
 
 			inline_alu_constants(ctx);
 
