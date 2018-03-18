@@ -715,6 +715,8 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				if (nir_intrinsic_base(instr) == VERTEX_EPILOGUE_BASE) {
 					alias_ssa(ctx, REGISTER_VERTEX, reg, true);
 				} else {
+					reg = 1; /* XXX WTF WTF WTF WHY DOES THIS WORK WTF */
+
 					midgard_instruction ins = m_store_vary_32(reg, offset);
 					ins.load_store.unknown = 0x1E9E; /* XXX: What is this? */
 					util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
