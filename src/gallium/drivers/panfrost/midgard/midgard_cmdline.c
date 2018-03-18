@@ -1017,7 +1017,6 @@ skip_instruction:
 	if (entry) { \
 		attach_constants(alu, entry); \
 		alu->ssa_args.src = REGISTER_CONSTANT; \
-		break; \
 	} \
 }
 
@@ -1228,11 +1227,11 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 				emit_instr(ctx, instr);
 			}
 
+			/* Workaround hardware quirk */
 			defer_stores(ctx);
 
-			inline_alu_constants(ctx);
-
 			/* Artefact of load_const, etc in the average case */
+			inline_alu_constants(ctx);
 			eliminate_constant_mov(ctx);
 
 			/* Perform heavylifting for aliasing */
@@ -1431,7 +1430,9 @@ int main(int argc, char **argv)
 	midgard_compile_shader_nir(nir, &compiled);
 	finalise_to_disk("/dev/shm/vertex.bin", &compiled);
 
+#if 0
 	nir = glsl_to_nir(prog, MESA_SHADER_FRAGMENT, &nir_options);
 	midgard_compile_shader_nir(nir, &compiled);
 	finalise_to_disk("/dev/shm/fragment.bin", &compiled);
+#endif
 }
