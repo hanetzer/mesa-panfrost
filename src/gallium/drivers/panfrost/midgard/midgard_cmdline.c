@@ -859,6 +859,7 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 			
 			/* TODO: Constant combining */
 			int index = 0, last_unit = 0;
+			bool has_embedded_constants = false;
 
 			while (ins + index) {
 				midgard_instruction *ains = ins + index; 
@@ -866,6 +867,16 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 				/* Ensure that the chain can continue */
 				if (ains->unused) goto skip_instruction;
 				if (ains->type != TAG_ALU_4 || ains->unit <= last_unit) break;
+
+				/* Only one set of embedded constants per
+				 * bundle possible; if we duplicate, we must
+				 * break the chain early, unfortunately */
+
+				if (ains->has_constants) {
+					if (has_embedded_constants) break;
+
+					has_embedded_constants = true;
+				}
 
 				control |= ains->unit;
 				last_unit = ains->unit;
