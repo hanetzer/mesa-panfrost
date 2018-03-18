@@ -272,6 +272,7 @@ __attribute__((__packed__))
 #define REGISTER_UNUSED 24
 #define REGISTER_CONSTANT 26
 #define REGISTER_OFFSET 27
+#define REGISTER_VERTEX 27
 #define REGISTER_TEXTURE_1 28
 #define REGISTER_TEXTURE_2 29
 #define REGISTER_SELECT  31
@@ -286,6 +287,9 @@ __attribute__((__packed__))
 #define SSA_FIXED_REGISTER(reg) ((1 + reg) << SSA_FIXED_SHIFT)
 #define SSA_REG_FROM_FIXED(reg) ((reg >> SSA_FIXED_SHIFT) - 1)
 #define SSA_FIXED_MINIMUM SSA_FIXED_REGISTER(0)
+
+/* Should be mapped to REGISTER_VERTEX, eventually */
+#define VERTEX_EPILOGUE_BASE 0xDEAD00
 
 /* Swizzle support */
 

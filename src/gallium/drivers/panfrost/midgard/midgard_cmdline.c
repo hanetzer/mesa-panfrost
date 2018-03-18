@@ -709,9 +709,19 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 
 				alias_ssa(ctx, 0, reg, true);
 			} else if (ctx->stage == MESA_SHADER_VERTEX) {
-				midgard_instruction ins = m_store_vary_32(reg, offset);
-				ins.load_store.unknown = 0x1E9E; /* XXX: What is this? */
-				util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
+				/* Either this is a write from the perspective
+				 * division / viewport scaling code and should
+				 * be translated to the special output
+				 * register, or otherwise it's just a varying
+				 * */
+
+				if (nir_intrinsic_base(instr) == VERTEX_EPILOGUE_BASE) {
+					alias_ssa(ctx, REGISTER_VERTEX, reg, true);
+				} else {
+					midgard_instruction ins = m_store_vary_32(reg, offset);
+					ins.load_store.unknown = 0x1E9E; /* XXX: What is this? */
+					util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
+				}
 			} else {
 				printf("Unknown store\n");
 				util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32(reg, offset));
@@ -1163,9 +1173,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 	compiler_context *ctx = &ictx;
 
-	/* Run initial optimisation pass */
-	//optimise_nir(nir);
-
+	optimise_nir(nir);
 	nir_print_shader(nir, stdout);
 
 	nir_foreach_function(func, nir) {
@@ -1258,27 +1266,31 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 }
 
 static void
+emit_vertex_epilogue(nir_builder *b)
+{
+	nir_intrinsic_instr *store;
+	store = nir_intrinsic_instr_create(b->shader, nir_intrinsic_store_output);
+	store->num_components = 4;
+	nir_intrinsic_set_base(store, /* out->data.driver_location */ VERTEX_EPILOGUE_BASE);
+	nir_intrinsic_set_write_mask(store, 0xf);
+	store->src[0].ssa = nir_vec4(b, 
+			nir_imm_float(b, 0.3f), 
+			nir_imm_float(b, 0.2f), 
+			nir_imm_float(b, 0.4f), 
+			nir_imm_float(b, 0.5f));
+	store->src[0].is_ssa = true;
+	store->src[1] = nir_src_for_ssa(nir_imm_int(b, 0));
+	nir_builder_instr_insert(b, &store->instr);
+}
+
+static void
 append_vertex_epilogue_func(nir_function_impl *impl)
 {
 	nir_builder b;
 
 	nir_builder_init(&b, impl);
 	b.cursor = nir_after_cf_list(&impl->body);
-
-	nir_intrinsic_instr *store;
-
-	store = nir_intrinsic_instr_create(b.shader, nir_intrinsic_store_output);
-	store->num_components = 4;
-	nir_intrinsic_set_base(store, /* out->data.driver_location */ 0);
-	nir_intrinsic_set_write_mask(store, 0xf);
-	store->src[0].ssa = nir_vec4(&b, 
-			nir_imm_float(&b, 0.1f), 
-			nir_imm_float(&b, 0.1f), 
-			nir_imm_float(&b, 0.1f), 
-			nir_imm_float(&b, 0.1f));
-	store->src[0].is_ssa = true;
-	store->src[1] = nir_src_for_ssa(nir_imm_int(&b, 0));
-	nir_builder_instr_insert(&b, &store->instr);
+	emit_vertex_epilogue(&b);
 }
 
 static void
