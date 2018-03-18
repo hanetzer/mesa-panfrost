@@ -343,9 +343,6 @@ optimise_nir(nir_shader *nir)
 {
 	bool progress;
 
-	nir_assign_var_locations(&nir->outputs, &nir->num_outputs, glsl_type_size);
-	nir_assign_var_locations(&nir->inputs, &nir->num_inputs, glsl_type_size);
-
 	//NIR_PASS_V(nir, nir_lower_io_to_temporaries, nir_shader_get_entrypoint(nir), true, true);
 	//NIR_PASS(progress, nir, nir_opt_global_to_local);
 	//NIR_PASS(progress, nir, nir_lower_regs_to_ssa);
@@ -1199,6 +1196,79 @@ skip:
 	}
 }
 
+/* Shader epilogues */
+
+static void
+emit_vertex_epilogue(nir_builder *b, int position)
+{
+	/* First, load the final gl_Position as written to the imaginary varying */
+
+	nir_intrinsic_instr *load;
+	load = nir_intrinsic_instr_create(b->shader, nir_intrinsic_load_output);
+	load->num_components = 4;
+	nir_intrinsic_set_base(load, position);
+	load->src[0] = nir_src_for_ssa(nir_imm_int(b, 0));
+	nir_ssa_dest_init(&load->instr, &load->dest, 4, 32, NULL);
+	nir_builder_instr_insert(b, &load->instr);
+
+	nir_ssa_def *input_point = &load->dest.ssa;
+
+	/* Next, apply the actual transformations. */
+	/* TODO: Don't assume 400x240 screen, nor 0.5, nor NDC input */
+	nir_ssa_def *window = nir_vec4(b, nir_imm_float(b, 200.0f), nir_imm_float(b, 120.0f), nir_imm_float(b, 0.5f), nir_imm_float(b, 0.0));
+	nir_ssa_def *persp = nir_vec4(b, nir_imm_float(b, 0), nir_imm_float(b, 0), nir_imm_float(b, 0), nir_imm_float(b, 1.0));
+	nir_ssa_def *transformed_point = nir_fadd(b, nir_fadd(b, nir_fmul(b, input_point, window), window), persp);
+
+	/* Finally, write out the transformed values to VERTEX_EPILOGUE_BASE
+	 * (which ends up being r27) */
+
+	nir_intrinsic_instr *store;
+	store = nir_intrinsic_instr_create(b->shader, nir_intrinsic_store_output);
+	store->num_components = 4;
+	nir_intrinsic_set_base(store, VERTEX_EPILOGUE_BASE);
+	nir_intrinsic_set_write_mask(store, 0xf);
+	store->src[0].ssa = transformed_point;
+	store->src[0].is_ssa = true;
+	store->src[1] = nir_src_for_ssa(nir_imm_int(b, 0));
+	nir_builder_instr_insert(b, &store->instr);
+}
+
+static void
+append_vertex_epilogue_func(nir_function_impl *impl, int position)
+{
+	nir_builder b;
+
+	nir_builder_init(&b, impl);
+	b.cursor = nir_after_cf_list(&impl->body);
+	emit_vertex_epilogue(&b, position);
+}
+
+static void
+append_vertex_epilogue(nir_shader *shader)
+{
+	int gl_Position_loc = -1;
+
+	/* First, find gl_Position for later pass */
+
+	nir_foreach_variable(var, &shader->outputs) {
+		if (var->data.location == VARYING_SLOT_POS)
+			gl_Position_loc = var->data.driver_location;
+	}
+
+	printf("pos %d\n", gl_Position_loc);
+
+	if (gl_Position_loc == -1)
+		printf("gl_Position not set?\n");
+
+
+	nir_foreach_function(func, shader) {
+		if (!strcmp(func->name, "main"))
+			append_vertex_epilogue_func(func->impl, gl_Position_loc);
+	}
+}
+
+
+
 static void
 emit_fragment_epilogue(compiler_context *ctx)
 {
@@ -1220,6 +1290,19 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 	compiler_context *ctx = &ictx;
 
+	/* Assign var locations early, so the epilogue can use them if necessary */
+	nir_assign_var_locations(&nir->outputs, &nir->num_outputs, glsl_type_size);
+	nir_assign_var_locations(&nir->inputs, &nir->num_inputs, glsl_type_size);
+
+	/* Append vertex epilogue before optimisation, so the epilogue itself
+	 * is optimised */
+
+	if (ctx->stage == MESA_SHADER_VERTEX)
+		append_vertex_epilogue(nir);
+
+	/* Optimisation passes */
+
+	nir_print_shader(nir, stdout);
 	optimise_nir(nir);
 	nir_print_shader(nir, stdout);
 
@@ -1315,77 +1398,6 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 }
 
 static void
-emit_vertex_epilogue(nir_builder *b)
-{
-	/* First, load the final gl_Position as written to the imaginary varying */
-
-	nir_intrinsic_instr *load;
-	load = nir_intrinsic_instr_create(b->shader, nir_intrinsic_load_input);
-	load->num_components = 4;
-	nir_intrinsic_set_base(load, 0 /* TODO */);
-	load->src[0] = nir_src_for_ssa(nir_imm_int(b, 0));
-	nir_ssa_dest_init(&load->instr, &load->dest, 4, 32, NULL);
-	nir_builder_instr_insert(b, &load->instr);
-
-	nir_ssa_def *input_point = &load->dest.ssa;
-
-	/* Next, apply the actual transformations. */
-	/* TODO: Don't assume 400x240 screen, nor 0.5, nor NDC input */
-#if 0
-	nir_ssa_def *transformed_point = nir_vec4(b, 
-			nir_fadd(b, nir_imm_float(b, 200.0), nir_fmul(b, nir_imm_float(b, 200.0), nir_channel(b, input_point, 0))),
-			nir_fadd(b, nir_imm_float(b, 120.0), nir_fmul(b, nir_imm_float(b, 120.0), nir_channel(b, input_point, 0))),
-			nir_fadd(b, nir_imm_float(b, 0.5),   nir_fmul(b, nir_imm_float(b, 0.5),   nir_channel(b, input_point, 0))),
-			nir_imm_float(b, 1.0));
-#endif
-	nir_ssa_def *window = nir_vec4(b, nir_imm_float(b, 200.0f), nir_imm_float(b, 120.0f), nir_imm_float(b, 0.5f), nir_imm_float(b, 0.0));
-	nir_ssa_def *persp = nir_vec4(b, nir_imm_float(b, 0), nir_imm_float(b, 0), nir_imm_float(b, 0), nir_imm_float(b, 1.0));
-	nir_ssa_def *transformed_point = nir_fadd(b, nir_fadd(b, nir_fmul(b, input_point, window), window), persp);
-
-	/* Finally, write out the transformed values to VERTEX_EPILOGUE_BASE
-	 * (which ends up being r27) */
-
-	nir_intrinsic_instr *store;
-	store = nir_intrinsic_instr_create(b->shader, nir_intrinsic_store_output);
-	store->num_components = 4;
-	nir_intrinsic_set_base(store, VERTEX_EPILOGUE_BASE);
-	nir_intrinsic_set_write_mask(store, 0xf);
-
-#if 0
-	store->src[0].ssa = nir_vec4(b, 
-			nir_imm_float(b, 0.3f), 
-			nir_imm_float(b, 0.2f), 
-			nir_imm_float(b, 0.4f), 
-			nir_imm_float(b, 0.5f));
-#endif
-	store->src[0].ssa = transformed_point;
-	store->src[0].is_ssa = true;
-	store->src[1] = nir_src_for_ssa(nir_imm_int(b, 0));
-	nir_builder_instr_insert(b, &store->instr);
-}
-
-static void
-append_vertex_epilogue_func(nir_function_impl *impl)
-{
-	nir_builder b;
-
-	nir_builder_init(&b, impl);
-	b.cursor = nir_after_cf_list(&impl->body);
-	emit_vertex_epilogue(&b);
-}
-
-static void
-append_vertex_epilogue(nir_shader *shader)
-{
-	nir_foreach_function(func, shader) {
-		if (!strcmp(func->name, "main")) {
-			append_vertex_epilogue_func(func->impl);
-		}
-	}
-
-}
-
-static void
 finalise_to_disk(const char *filename, struct util_dynarray *data)
 {
 	FILE *fp;
@@ -1437,7 +1449,6 @@ int main(int argc, char **argv)
 	struct util_dynarray compiled;
 
 	nir = glsl_to_nir(prog, MESA_SHADER_VERTEX, &nir_options);
-	append_vertex_epilogue(nir);
 	midgard_compile_shader_nir(nir, &compiled);
 	finalise_to_disk("/dev/shm/vertex.bin", &compiled);
 
