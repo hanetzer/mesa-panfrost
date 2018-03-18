@@ -892,6 +892,7 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					bytes_emitted += sizeof(midgard_scalar_alu_t);
 
 					/* TODO: Emit pipeline registers and batch instructions once we know how XXX */
+					++index;	
 					break;
 				}
 
@@ -927,7 +928,6 @@ skip_instruction:
 
 			for (int i = 0; i < body_words_count; ++i)
 				memcpy(util_dynarray_grow(emission, body_size[i]), &body_words[i], body_size[i]);
-
 
 			/* Emit padding */
 			util_dynarray_grow(emission, padding);
@@ -1287,7 +1287,19 @@ emit_vertex_epilogue(nir_builder *b)
 	nir_builder_instr_insert(b, &load->instr);
 
 	nir_ssa_def *input_point = &load->dest.ssa;
-	nir_ssa_def *transformed_point = input_point;
+
+	/* Next, apply the actual transformations. */
+	/* TODO: Don't assume 400x240 screen, nor 0.5, nor NDC input */
+#if 0
+	nir_ssa_def *transformed_point = nir_vec4(b, 
+			nir_fadd(b, nir_imm_float(b, 200.0), nir_fmul(b, nir_imm_float(b, 200.0), nir_channel(b, input_point, 0))),
+			nir_fadd(b, nir_imm_float(b, 120.0), nir_fmul(b, nir_imm_float(b, 120.0), nir_channel(b, input_point, 0))),
+			nir_fadd(b, nir_imm_float(b, 0.5),   nir_fmul(b, nir_imm_float(b, 0.5),   nir_channel(b, input_point, 0))),
+			nir_imm_float(b, 1.0));
+#endif
+	nir_ssa_def *window = nir_vec4(b, nir_imm_float(b, 200.0f), nir_imm_float(b, 120.0f), nir_imm_float(b, 0.5f), nir_imm_float(b, 0.0));
+	nir_ssa_def *persp = nir_vec4(b, nir_imm_float(b, 0), nir_imm_float(b, 0), nir_imm_float(b, 0), nir_imm_float(b, 1.0));
+	nir_ssa_def *transformed_point = nir_fadd(b, nir_fadd(b, nir_fmul(b, input_point, window), window), persp);
 
 	/* Finally, write out the transformed values to VERTEX_EPILOGUE_BASE
 	 * (which ends up being r27) */
