@@ -1390,8 +1390,19 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 	util_dynarray_init(compiled, NULL);
 	util_dynarray_init(&tags, NULL);
 
-	/* XXX: Workaround hardware errata where shaders must start with a load/store instruction */
-	if (unlikely(*((uint8_t *) ctx->current_block.data) != TAG_LOAD_STORE_4)) {
+	/* XXX: Workaround hardware errata where shaders must start with a
+	 * load/store instruction by adding a noop load */
+
+	int first_tag = 0;
+
+	util_dynarray_foreach(&ctx->current_block, midgard_instruction, ins) {
+		if (!ins->unused) {
+			first_tag = ins->type;
+			break;
+		}
+	}
+
+	if (unlikely(first_tag != TAG_LOAD_STORE_4)) {
 		midgard_load_store_t instruction = {
 			.tag = TAG_LOAD_STORE_4,
 			.word1 = 3,
