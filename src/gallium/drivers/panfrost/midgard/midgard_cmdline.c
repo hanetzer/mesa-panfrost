@@ -830,6 +830,20 @@ allocate_registers(compiler_context *ctx)
 #define EMIT_AND_COUNT(type, val) util_dynarray_append(emission, type, val); \
 				  bytes_emitted += sizeof(type)
 
+static void
+emit_binary_vector_instruction(midgard_instruction *ains,
+		uint16_t *register_words, int *register_words_count, 
+		uint64_t *body_words, size_t *body_size, int *body_words_count, 
+		size_t *bytes_emitted)
+{
+	memcpy(&register_words[(*register_words_count)++], &ains->registers, sizeof(ains->registers));
+	*bytes_emitted += sizeof(alu_register_word);
+
+	body_size[*body_words_count] = sizeof(midgard_vector_alu_t);
+	memcpy(&body_words[(*body_words_count)++], &ains->vector_alu, sizeof(ains->vector_alu));
+	*bytes_emitted += sizeof(midgard_vector_alu_t);
+}
+
 /* Returns the number of instructions emitted (minus one). In trivial cases,
  * this equals one (zero returned), but when instructions are paired (the
  * optimal case) this can be two, or in the best case for ALUs, up to five. */
@@ -881,13 +895,21 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 				last_unit = ains->unit;
 
 				if (ains->vector) {
-					memcpy(&register_words[register_words_count++], &ains->registers, sizeof(ains->registers));
-					bytes_emitted += sizeof(alu_register_word);
-
-					body_size[body_words_count] = sizeof(midgard_vector_alu_t);
-					memcpy(&body_words[body_words_count++], &ains->vector_alu, sizeof(ains->vector_alu));
-					bytes_emitted += sizeof(midgard_vector_alu_t);
+					emit_binary_vector_instruction(ains, register_words,
+							&register_words_count, body_words,
+							body_size, &body_words_count, &bytes_emitted);
 				} else if (ains->compact_branch) {
+					/* XXX: Workaround hardware errata where branches cannot standalone in a word by including a dummy move */
+					if (index == 0) {
+						midgard_instruction ins = v_fmov(0, blank_alu_src, 0, true, midgard_outmod_none);
+
+						control |= ins.unit;
+
+						emit_binary_vector_instruction(&ins, register_words,
+								&register_words_count, body_words,
+								body_size, &body_words_count, &bytes_emitted);
+					}
+
 					body_size[body_words_count] = sizeof(ains->br_compact);
 					memcpy(&body_words[body_words_count++], &ains->br_compact, sizeof(ains->br_compact));
 					bytes_emitted += sizeof(ains->br_compact);
@@ -1305,12 +1327,9 @@ append_vertex_epilogue(nir_shader *shader)
 static void
 emit_fragment_epilogue(compiler_context *ctx)
 {
+	/* See the docs for why this works */
+
 	EMIT(alu_br_compact_cond, midgard_jmp_writeout_op_writeout, TAG_ALU_4, 0, COND_FBWRITE);
-
-	/* Errata workaround -- the above write can sometimes
-	 * fail -.- */
-
-	EMIT(fmov, 0, blank_alu_src, 0, true, midgard_outmod_none);
 	EMIT(alu_br_compact_cond, midgard_jmp_writeout_op_writeout, TAG_ALU_4, -1, COND_FBWRITE);
 }
 
