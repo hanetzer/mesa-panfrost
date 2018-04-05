@@ -74,12 +74,18 @@ files_softpipe = files(
   'sp_texture.h',
   'sp_tile_cache.c',
   'sp_tile_cache.h',
+
+    '/home/guest/panloader/trans/pandev.c',
+    '/home/guest/panloader/trans/allocate.c',
+    '/home/guest/panloader/trans/assemble.c',
+    '/home/guest/panloader/trans/slow-framebuffer.c',
+    '/home/guest/panloader/trans/trans-builder.c',
 )
 
 libsoftpipe = static_library(
   'softpipe',
   files_softpipe,
-  include_directories : [inc_gallium_aux, inc_gallium, inc_include, inc_src],
+  include_directories : [inc_gallium_aux, inc_gallium, inc_include, inc_src, include_directories('/home/guest/panloader/trans'), include_directories('/home/guest/panloader/include'), include_directories('/home/guest/panloader/build/include')],
   c_args : [c_vis_args, c_msvc_compat_args],
 )
 
