@@ -85,6 +85,7 @@ files_softpipe = files(
 libsoftpipe = static_library(
   'softpipe',
   files_softpipe,
+  dependencies: [cc.find_library('X11', required: true)],
   include_directories : [inc_gallium_aux, inc_gallium, inc_include, inc_src, include_directories('/home/guest/panloader/trans'), include_directories('/home/guest/panloader/include'), include_directories('/home/guest/panloader/build/include')],
   c_args : [c_vis_args, c_msvc_compat_args],
 )

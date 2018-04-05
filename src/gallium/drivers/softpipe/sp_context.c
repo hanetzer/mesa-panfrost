@@ -190,7 +190,7 @@ softpipe_render_condition(struct pipe_context *pipe,
    softpipe->render_cond_cond = condition;
 }
 
-
+#include <trans-builder.h>
 
 struct pipe_context *
 softpipe_create_context(struct pipe_screen *screen,
@@ -199,6 +199,8 @@ softpipe_create_context(struct pipe_screen *screen,
    struct softpipe_screen *sp_screen = softpipe_screen(screen);
    struct softpipe_context *softpipe = CALLOC_STRUCT(softpipe_context);
    uint i, sh;
+
+   softpipe->panfrost = panfrost_create_context(screen, priv, flags);
 
    util_init_math();
 

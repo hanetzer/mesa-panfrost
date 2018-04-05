@@ -56,6 +56,8 @@ softpipe_clear(struct pipe_context *pipe, unsigned buffers,
    uint64_t cv;
    uint i;
 
+   softpipe->panfrost->clear(softpipe->panfrost, buffers, color, depth, stencil);
+
    if (softpipe->no_rast)
       return;
 

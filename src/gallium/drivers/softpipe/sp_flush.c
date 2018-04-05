@@ -49,6 +49,8 @@ softpipe_flush( struct pipe_context *pipe,
                 struct pipe_fence_handle **fence )
 {
    struct softpipe_context *softpipe = softpipe_context(pipe);
+   softpipe->panfrost->flush(softpipe->panfrost, fence, flags);
+   printf("Flush\n");
    uint i;
 
    draw_flush(softpipe->draw);

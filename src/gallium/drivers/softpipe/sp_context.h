@@ -60,6 +60,8 @@ struct sp_so_state;
 struct softpipe_context {
    struct pipe_context pipe;  /**< base class */
 
+   struct pipe_context* panfrost;  /** Hacked in driver context */
+
    /** Constant state objects */
    struct pipe_blend_state *blend;
    struct pipe_sampler_state *samplers[PIPE_SHADER_TYPES][PIPE_MAX_SAMPLERS];
