@@ -66,6 +66,8 @@ softpipe_draw_vbo(struct pipe_context *pipe,
    const void *mapped_indices = NULL;
    unsigned i;
 
+   printf("draw_vbo %d-%d (%d)\n", info->start, info->count, info->index_size);
+
    if (!softpipe_check_render_cond(sp))
       return;
 

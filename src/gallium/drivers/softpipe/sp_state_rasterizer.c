@@ -37,7 +37,7 @@ static void *
 softpipe_create_rasterizer_state(struct pipe_context *pipe,
                                  const struct pipe_rasterizer_state *rast)
 {
-   return mem_dup(rast, sizeof(*rast));
+	return softpipe_context(pipe)->panfrost->create_rasterizer_state(softpipe_context(pipe)->panfrost, rast);
 }
 
 
@@ -45,6 +45,8 @@ static void
 softpipe_bind_rasterizer_state(struct pipe_context *pipe,
                                void *rasterizer)
 {
+	softpipe_context(pipe)->panfrost->bind_rasterizer_state(softpipe_context(pipe)->panfrost, rasterizer);
+
    struct softpipe_context *softpipe = softpipe_context(pipe);
 
    if (softpipe->rasterizer == rasterizer)
@@ -63,7 +65,7 @@ static void
 softpipe_delete_rasterizer_state(struct pipe_context *pipe,
                                  void *rasterizer)
 {
-   FREE( rasterizer );
+	softpipe_context(pipe)->panfrost->delete_rasterizer_state(softpipe_context(pipe)->panfrost, rasterizer);
 }
 
 
