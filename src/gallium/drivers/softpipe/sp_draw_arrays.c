@@ -67,7 +67,9 @@ softpipe_draw_vbo(struct pipe_context *pipe,
    unsigned i;
 
    printf("draw_vbo %d-%d (%d)\n", info->start, info->count, info->index_size);
+   return;
 
+#if 0
    if (!softpipe_check_render_cond(sp))
       return;
 
@@ -169,4 +171,5 @@ softpipe_draw_vbo(struct pipe_context *pipe,
 
    /* Note: leave drawing surfaces mapped */
    sp->dirty_render_cache = TRUE;
+#endif
 }

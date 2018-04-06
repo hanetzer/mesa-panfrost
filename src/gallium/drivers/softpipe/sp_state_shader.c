@@ -120,25 +120,7 @@ softpipe_create_fs_state(struct pipe_context *pipe,
                          const struct pipe_shader_state *templ)
 {
    struct softpipe_context *softpipe = softpipe_context(pipe);
-   struct sp_fragment_shader *state = CALLOC_STRUCT(sp_fragment_shader);
-
-   /* debug */
-   if (softpipe->dump_fs) 
-      tgsi_dump(templ->tokens, 0);
-
-   /* we need to keep a local copy of the tokens */
-   state->shader.tokens = tgsi_dup_tokens(templ->tokens);
-
-   /* draw's fs state */
-   state->draw_shader = draw_create_fragment_shader(softpipe->draw,
-                                                    &state->shader);
-   if (!state->draw_shader) {
-      tgsi_free_tokens(state->shader.tokens);
-      FREE(state);
-      return NULL;
-   }
-
-   return state;
+   return softpipe->panfrost->create_fs_state(softpipe->panfrost, templ);
 }
 
 
@@ -146,57 +128,14 @@ static void
 softpipe_bind_fs_state(struct pipe_context *pipe, void *fs)
 {
    struct softpipe_context *softpipe = softpipe_context(pipe);
-   struct sp_fragment_shader *state = (struct sp_fragment_shader *) fs;
-
-   if (softpipe->fs == fs)
-      return;
-
-   draw_flush(softpipe->draw);
-
-   softpipe->fs = fs;
-
-   /* This depends on the current fragment shader and must always be
-    * re-validated before use.
-    */
-   softpipe->fs_variant = NULL;
-
-   if (state)
-      draw_bind_fragment_shader(softpipe->draw,
-                                state->draw_shader);
-   else
-      draw_bind_fragment_shader(softpipe->draw, NULL);
-
-   softpipe->dirty |= SP_NEW_FS;
+   softpipe->panfrost->bind_fs_state(softpipe->panfrost, fs);
 }
 
 
 static void
 softpipe_delete_fs_state(struct pipe_context *pipe, void *fs)
 {
-   struct softpipe_context *softpipe = softpipe_context(pipe);
-   struct sp_fragment_shader *state = fs;
-   struct sp_fragment_shader_variant *var, *next_var;
-
-   assert(fs != softpipe->fs);
-
-   /* delete variants */
-   for (var = state->variants; var; var = next_var) {
-      next_var = var->next;
-
-      assert(var != softpipe->fs_variant);
-
-      /* See comments elsewhere about draw fragment shaders */
-#if 0
-      draw_delete_fragment_shader(softpipe->draw, var->draw_shader);
-#endif
-
-      var->delete(var, softpipe->fs_machine);
-   }
-
-   draw_delete_fragment_shader(softpipe->draw, state->draw_shader);
-
-   tgsi_free_tokens(state->shader.tokens);
-   FREE(state);
+   FREE(fs);
 }
 
 
@@ -205,33 +144,7 @@ softpipe_create_vs_state(struct pipe_context *pipe,
                          const struct pipe_shader_state *templ)
 {
    struct softpipe_context *softpipe = softpipe_context(pipe);
-   struct sp_vertex_shader *state;
-
-   state = CALLOC_STRUCT(sp_vertex_shader);
-   if (!state)
-      goto fail;
-
-   /* copy shader tokens, the ones passed in will go away.
-    */
-   state->shader.tokens = tgsi_dup_tokens(templ->tokens);
-   if (state->shader.tokens == NULL)
-      goto fail;
-
-   state->draw_data = draw_create_vertex_shader(softpipe->draw, templ);
-   if (state->draw_data == NULL) 
-      goto fail;
-
-   state->max_sampler = state->draw_data->info.file_max[TGSI_FILE_SAMPLER];
-
-   return state;
-
-fail:
-   if (state) {
-      tgsi_free_tokens(state->shader.tokens);
-      FREE( state->draw_data );
-      FREE( state );
-   }
-   return NULL;
+   return softpipe->panfrost->create_vs_state(softpipe->panfrost, templ);
 }
 
 
@@ -239,26 +152,14 @@ static void
 softpipe_bind_vs_state(struct pipe_context *pipe, void *vs)
 {
    struct softpipe_context *softpipe = softpipe_context(pipe);
-
-   softpipe->vs = (struct sp_vertex_shader *) vs;
-
-   draw_bind_vertex_shader(softpipe->draw,
-                           (softpipe->vs ? softpipe->vs->draw_data : NULL));
-
-   softpipe->dirty |= SP_NEW_VS;
+   softpipe->panfrost->bind_vs_state(softpipe->panfrost, vs);
 }
 
 
 static void
 softpipe_delete_vs_state(struct pipe_context *pipe, void *vs)
 {
-   struct softpipe_context *softpipe = softpipe_context(pipe);
-
-   struct sp_vertex_shader *state = (struct sp_vertex_shader *) vs;
-
-   draw_delete_vertex_shader(softpipe->draw, state->draw_data);
-   tgsi_free_tokens(state->shader.tokens);
-   FREE( state );
+   FREE( vs );
 }
 
 
