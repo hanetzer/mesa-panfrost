@@ -67,6 +67,7 @@ softpipe_draw_vbo(struct pipe_context *pipe,
    unsigned i;
 
    printf("draw_vbo %d-%d (%d)\n", info->start, info->count, info->index_size);
+   sp->panfrost->draw_vbo(sp->panfrost, info);
    return;
 
 #if 0

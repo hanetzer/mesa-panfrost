@@ -44,14 +44,8 @@ softpipe_create_vertex_elements_state(struct pipe_context *pipe,
                                       unsigned count,
                                       const struct pipe_vertex_element *attribs)
 {
-   struct sp_velems_state *velems;
-   assert(count <= PIPE_MAX_ATTRIBS);
-   velems = (struct sp_velems_state *) MALLOC(sizeof(struct sp_velems_state));
-   if (velems) {
-      velems->count = count;
-      memcpy(velems->velem, attribs, sizeof(*attribs) * count);
-   }
-   return velems;
+   struct softpipe_context *softpipe = softpipe_context(pipe);
+   return softpipe->panfrost->create_vertex_elements_state(softpipe->panfrost, count, attribs);
 }
 
 
@@ -60,14 +54,7 @@ softpipe_bind_vertex_elements_state(struct pipe_context *pipe,
                                     void *velems)
 {
    struct softpipe_context *softpipe = softpipe_context(pipe);
-   struct sp_velems_state *sp_velems = (struct sp_velems_state *) velems;
-
-   softpipe->velems = sp_velems;
-
-   softpipe->dirty |= SP_NEW_VERTEX;
-
-   if (sp_velems)
-      draw_set_vertex_elements(softpipe->draw, sp_velems->count, sp_velems->velem);
+   softpipe->panfrost->bind_vertex_elements_state(softpipe->panfrost, velems);
 }
 
 
@@ -84,16 +71,7 @@ softpipe_set_vertex_buffers(struct pipe_context *pipe,
                             const struct pipe_vertex_buffer *buffers)
 {
    struct softpipe_context *softpipe = softpipe_context(pipe);
-
-   assert(count <= PIPE_MAX_ATTRIBS);
-
-   util_set_vertex_buffers_count(softpipe->vertex_buffer,
-                                 &softpipe->num_vertex_buffers,
-                                 buffers, start_slot, count);
-
-   softpipe->dirty |= SP_NEW_VERTEX;
-
-   draw_set_vertex_buffers(softpipe->draw, start_slot, count, buffers);
+   softpipe->panfrost->set_vertex_buffers(softpipe->panfrost, start_slot, count, buffers);
 }
 
 
