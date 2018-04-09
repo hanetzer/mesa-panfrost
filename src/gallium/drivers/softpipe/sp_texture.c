@@ -362,6 +362,10 @@ softpipe_transfer_map(struct pipe_context *pipe,
                       const struct pipe_box *box,
                       struct pipe_transfer **transfer)
 {
+
+   struct softpipe_context *softpipe = softpipe_context(pipe);
+   return softpipe->panfrost->transfer_map(softpipe->panfrost, resource, level, usage, box, transfer);
+
    struct sw_winsys *winsys = softpipe_screen(pipe->screen)->winsys;
    struct softpipe_resource *spr = softpipe_resource(resource);
    struct softpipe_transfer *spt;
