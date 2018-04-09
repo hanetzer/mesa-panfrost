@@ -51,43 +51,5 @@ softpipe_clear(struct pipe_context *pipe, unsigned buffers,
                double depth, unsigned stencil)
 {
    struct softpipe_context *softpipe = softpipe_context(pipe);
-   struct pipe_surface *zsbuf = softpipe->framebuffer.zsbuf;
-   unsigned zs_buffers = buffers & PIPE_CLEAR_DEPTHSTENCIL;
-   uint64_t cv;
-   uint i;
-
    softpipe->panfrost->clear(softpipe->panfrost, buffers, color, depth, stencil);
-
-   if (softpipe->no_rast)
-      return;
-
-   if (!softpipe_check_render_cond(softpipe))
-      return;
-
-#if 0
-   softpipe_update_derived(softpipe, PIPE_PRIM_TRIANGLES); /* not needed?? */
-#endif
-
-   if (buffers & PIPE_CLEAR_COLOR) {
-	   printf("Colour clear\n");
-      for (i = 0; i < softpipe->framebuffer.nr_cbufs; i++) {
-         sp_tile_cache_clear(softpipe->cbuf_cache[i], color, 0);
-      }
-   }
-
-   if (zs_buffers &&
-       util_format_is_depth_and_stencil(zsbuf->texture->format) &&
-       zs_buffers != PIPE_CLEAR_DEPTHSTENCIL) {
-      /* Clearing only depth or stencil in a combined depth-stencil buffer. */
-      util_clear_depth_stencil(pipe, zsbuf, zs_buffers, depth, stencil,
-                               0, 0, zsbuf->width, zsbuf->height);
-   }
-   else if (zs_buffers) {
-      static const union pipe_color_union zero;
-
-      cv = util_pack64_z_stencil(zsbuf->format, depth, stencil);
-      sp_tile_cache_clear(softpipe->zsbuf_cache, &zero, cv);
-   }
-
-   softpipe->dirty_render_cache = TRUE;
 }

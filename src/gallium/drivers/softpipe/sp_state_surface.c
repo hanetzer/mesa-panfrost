@@ -49,48 +49,6 @@ softpipe_set_framebuffer_state(struct pipe_context *pipe,
                                const struct pipe_framebuffer_state *fb)
 {
    struct softpipe_context *sp = softpipe_context(pipe);
-   uint i;
-
-   draw_flush(sp->draw);
-
-   for (i = 0; i < PIPE_MAX_COLOR_BUFS; i++) {
-      struct pipe_surface *cb = i < fb->nr_cbufs ? fb->cbufs[i] : NULL;
-
-      /* check if changing cbuf */
-      if (sp->framebuffer.cbufs[i] != cb) {
-         /* flush old */
-         sp_flush_tile_cache(sp->cbuf_cache[i]);
-
-         /* assign new */
-         pipe_surface_reference(&sp->framebuffer.cbufs[i], cb);
-
-         /* update cache */
-         sp_tile_cache_set_surface(sp->cbuf_cache[i], cb);
-      }
-   }
-
-   sp->framebuffer.nr_cbufs = fb->nr_cbufs;
-
-   /* zbuf changing? */
-   if (sp->framebuffer.zsbuf != fb->zsbuf) {
-      /* flush old */
-      sp_flush_tile_cache(sp->zsbuf_cache);
-
-      /* assign new */
-      pipe_surface_reference(&sp->framebuffer.zsbuf, fb->zsbuf);
-
-      /* update cache */
-      sp_tile_cache_set_surface(sp->zsbuf_cache, fb->zsbuf);
-
-      /* Tell draw module how deep the Z/depth buffer is
-       *
-       * If no depth buffer is bound, send the utility function the
-       * format for no bound depth (PIPE_FORMAT_NONE).
-       */
-      draw_set_zs_format(sp->draw,
-                         (sp->framebuffer.zsbuf) ?
-                            sp->framebuffer.zsbuf->format : PIPE_FORMAT_NONE);
-   }
 
    sp->framebuffer.width = fb->width;
    sp->framebuffer.height = fb->height;
