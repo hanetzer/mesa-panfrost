@@ -362,98 +362,8 @@ softpipe_transfer_map(struct pipe_context *pipe,
                       const struct pipe_box *box,
                       struct pipe_transfer **transfer)
 {
-
    struct softpipe_context *softpipe = softpipe_context(pipe);
    return softpipe->panfrost->transfer_map(softpipe->panfrost, resource, level, usage, box, transfer);
-
-   struct sw_winsys *winsys = softpipe_screen(pipe->screen)->winsys;
-   struct softpipe_resource *spr = softpipe_resource(resource);
-   struct softpipe_transfer *spt;
-   struct pipe_transfer *pt;
-   enum pipe_format format = resource->format;
-   uint8_t *map;
-
-   assert(resource);
-   assert(level <= resource->last_level);
-
-   /* make sure the requested region is in the image bounds */
-   assert(box->x + box->width <= (int) u_minify(resource->width0, level));
-   if (resource->target == PIPE_TEXTURE_1D_ARRAY) {
-      assert(box->y + box->height <= (int) resource->array_size);
-   }
-   else {
-      assert(box->y + box->height <= (int) u_minify(resource->height0, level));
-      if (resource->target == PIPE_TEXTURE_2D_ARRAY) {
-         assert(box->z + box->depth <= (int) resource->array_size);
-      }
-      else if (resource->target == PIPE_TEXTURE_CUBE) {
-         assert(box->z < 6);
-      }
-      else if (resource->target == PIPE_TEXTURE_CUBE_ARRAY) {
-         assert(box->z <= (int) resource->array_size);
-      }
-      else {
-         assert(box->z + box->depth <= (int) u_minify(resource->depth0, level));
-      }
-   }
-
-   /*
-    * Transfers, like other pipe operations, must happen in order, so flush the
-    * context if necessary.
-    */
-   if (!(usage & PIPE_TRANSFER_UNSYNCHRONIZED)) {
-      boolean read_only = !(usage & PIPE_TRANSFER_WRITE);
-      boolean do_not_block = !!(usage & PIPE_TRANSFER_DONTBLOCK);
-      if (!softpipe_flush_resource(pipe, resource,
-                                   level, box->depth > 1 ? -1 : box->z,
-                                   0, /* flush_flags */
-                                   read_only,
-                                   TRUE, /* cpu_access */
-                                   do_not_block)) {
-         /*
-          * It would have blocked, but state tracker requested no to.
-          */
-         assert(do_not_block);
-         return NULL;
-      }
-   }
-
-   spt = CALLOC_STRUCT(softpipe_transfer);
-   if (!spt)
-      return NULL;
-
-   pt = &spt->base;
-
-   pipe_resource_reference(&pt->resource, resource);
-   pt->level = level;
-   pt->usage = usage;
-   pt->box = *box;
-   pt->stride = spr->stride[level];
-   pt->layer_stride = spr->img_stride[level];
-
-   spt->offset = softpipe_get_tex_image_offset(spr, level, box->z);
-
-   spt->offset +=
-         box->y / util_format_get_blockheight(format) * spt->base.stride +
-         box->x / util_format_get_blockwidth(format) * util_format_get_blocksize(format);
-
-   /* resources backed by display target treated specially:
-    */
-   if (spr->dt) {
-      map = winsys->displaytarget_map(winsys, spr->dt, usage);
-   }
-   else {
-      map = spr->data;
-   }
-
-   if (!map) {
-      pipe_resource_reference(&pt->resource, NULL);
-      FREE(spt);
-      return NULL;
-   }
-
-   *transfer = pt;
-   return map + spt->offset;
 }
 
 
@@ -464,24 +374,8 @@ static void
 softpipe_transfer_unmap(struct pipe_context *pipe,
                         struct pipe_transfer *transfer)
 {
-   struct softpipe_resource *spr;
-
-   assert(transfer->resource);
-   spr = softpipe_resource(transfer->resource);
-
-   if (spr->dt) {
-      /* display target */
-      struct sw_winsys *winsys = softpipe_screen(pipe->screen)->winsys;
-      winsys->displaytarget_unmap(winsys, spr->dt);
-   }
-
-   if (transfer->usage & PIPE_TRANSFER_WRITE) {
-      /* Mark the texture as dirty to expire the tile caches. */
-      spr->timestamp++;
-   }
-
-   pipe_resource_reference(&transfer->resource, NULL);
-   FREE(transfer);
+   struct softpipe_context *softpipe = softpipe_context(pipe);
+   return softpipe->panfrost->transfer_unmap(softpipe->panfrost, transfer);
 }
 
 /**
