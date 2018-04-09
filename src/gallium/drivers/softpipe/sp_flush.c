@@ -50,47 +50,6 @@ softpipe_flush( struct pipe_context *pipe,
 {
    struct softpipe_context *softpipe = softpipe_context(pipe);
    softpipe->panfrost->flush(softpipe->panfrost, fence, flags);
-   printf("Flush\n");
-   uint i;
-
-   draw_flush(softpipe->draw);
-
-   if (flags & SP_FLUSH_TEXTURE_CACHE) {
-      unsigned sh;
-
-      for (sh = 0; sh < ARRAY_SIZE(softpipe->tex_cache); sh++) {
-         for (i = 0; i < softpipe->num_sampler_views[sh]; i++) {
-            sp_flush_tex_tile_cache(softpipe->tex_cache[sh][i]);
-         }
-      }
-   }
-
-   /* If this is a swapbuffers, just flush color buffers.
-    *
-    * The zbuffer changes are not discarded, but held in the cache
-    * in the hope that a later clear will wipe them out.
-    */
-   for (i = 0; i < softpipe->framebuffer.nr_cbufs; i++)
-      if (softpipe->cbuf_cache[i])
-         sp_flush_tile_cache(softpipe->cbuf_cache[i]);
-
-   if (softpipe->zsbuf_cache)
-      sp_flush_tile_cache(softpipe->zsbuf_cache);
-
-   softpipe->dirty_render_cache = FALSE;
-
-   /* Enable to dump BMPs of the color/depth buffers each frame */
-#if 0
-   if (flags & PIPE_FLUSH_END_OF_FRAME) {
-      static unsigned frame_no = 1;
-      static char filename[256];
-      util_snprintf(filename, sizeof(filename), "cbuf_%u.bmp", frame_no);
-      debug_dump_surface_bmp(pipe, filename, softpipe->framebuffer.cbufs[0]);
-      util_snprintf(filename, sizeof(filename), "zsbuf_%u.bmp", frame_no);
-      debug_dump_surface_bmp(pipe, filename, softpipe->framebuffer.zsbuf);
-      ++frame_no;
-   }
-#endif
 
    if (fence)
       *fence = (void*)(intptr_t)1;

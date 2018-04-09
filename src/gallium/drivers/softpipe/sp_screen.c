@@ -490,9 +490,11 @@ softpipe_flush_frontbuffer(struct pipe_screen *_screen,
    struct sw_winsys *winsys = screen->winsys;
    struct softpipe_resource *texture = softpipe_resource(resource);
 
+#if 0
    assert(texture->dt);
    if (texture->dt)
       winsys->displaytarget_display(winsys, texture->dt, context_private, sub_box);
+#endif
 }
 
 static uint64_t

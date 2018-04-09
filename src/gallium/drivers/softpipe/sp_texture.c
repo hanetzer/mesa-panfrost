@@ -147,6 +147,8 @@ softpipe_displaytarget_layout(struct pipe_screen *screen,
    return spr->dt != NULL;
 }
 
+#define __PAN_GALLIUM
+#include <trans-builder.h>
 
 /**
  * Create new pipe_resource given the template information.
@@ -156,6 +158,7 @@ softpipe_resource_create_front(struct pipe_screen *screen,
                                const struct pipe_resource *templat,
                                const void *map_front_private)
 {
+	return panfrost_resource_create_front(screen, templat, map_front_private);
    struct softpipe_resource *spr = CALLOC_STRUCT(softpipe_resource);
    if (!spr)
       return NULL;
