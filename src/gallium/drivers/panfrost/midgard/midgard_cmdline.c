@@ -710,7 +710,7 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				 * varying register and then a magic value of 1
 				 * is used in the st_vary instruction */
 
-				EMIT(fmov, reg, blank_alu_src, 27, true, midgard_outmod_none);
+				EMIT(fmov, reg, blank_alu_src, REGISTER_VARYING, true, midgard_outmod_none);
 				//alias_ssa(ctx, REGISTER_VERTEX, reg,
 				//		true);
 
@@ -1230,8 +1230,7 @@ emit_vertex_epilogue(nir_builder *b, nir_ssa_def *input_point)
 	nir_ssa_def *persp = nir_vec4(b, nir_imm_float(b, 0), nir_imm_float(b, 0), nir_imm_float(b, 0), nir_imm_float(b, 1.0));
 	nir_ssa_def *transformed_point = nir_fadd(b, nir_fadd(b, nir_fmul(b, input_point, window), window), persp);
 
-	/* Finally, write out the transformed values to VERTEX_EPILOGUE_BASE
-	 * (which ends up being r27) */
+	/* Finally, write out the transformed values to the varying */
 
 	nir_intrinsic_instr *store;
 	store = nir_intrinsic_instr_create(b->shader, nir_intrinsic_store_output);
