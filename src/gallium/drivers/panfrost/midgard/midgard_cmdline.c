@@ -1301,6 +1301,7 @@ append_vertex_epilogue(nir_shader *shader)
 
 	/* First, find gl_Position for later pass */
 
+#if 0
 	nir_foreach_variable(var, &shader->outputs) {
 		if (var->data.location == VARYING_SLOT_POS)
 			gl_Position = find_output(shader, var->data.driver_location);
@@ -1310,14 +1311,38 @@ append_vertex_epilogue(nir_shader *shader)
 		printf("gl_Position not written in vertex shader\n");
 		return;
 	}
+#endif
 
 	nir_foreach_function(func, shader) {
-		if (!strcmp(func->name, "main")) {
-			nir_builder b;
+		nir_foreach_block(block, func->impl) {
+			nir_foreach_instr_safe(instr, block) {
+				if (instr->type == nir_instr_type_intrinsic) {
+					nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+					nir_variable *out = NULL;
+					printf("intrins\n");
 
-			nir_builder_init(&b, func->impl);
-			b.cursor = nir_after_cf_list(&func->impl->body);
-			emit_vertex_epilogue(&b, gl_Position);
+					if (intr->intrinsic == nir_intrinsic_store_var) {
+						printf("store\n");
+						out = intr->variables[0]->var;
+
+						if (out->data.mode != nir_var_shader_out)
+							continue;
+
+						printf("out\n");
+
+						if (out->data.location != VARYING_SLOT_POS)
+							continue;
+
+						printf("pos\n");
+						gl_Position = intr->src[0].ssa;
+
+						nir_builder b;
+						nir_builder_init(&b, func->impl);
+						b.cursor = nir_before_instr(&intr->instr);
+						emit_vertex_epilogue(&b, gl_Position);
+					}
+				}
+			}
 		}
 	}
 }
@@ -1335,6 +1360,8 @@ emit_fragment_epilogue(compiler_context *ctx)
 static int
 midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 {
+	bool progress;
+
 	compiler_context ictx = {
 		.stage = nir->info.stage
 	};
@@ -1345,18 +1372,21 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 	nir_assign_var_locations(&nir->outputs, &nir->num_outputs, glsl_type_size);
 	nir_assign_var_locations(&nir->inputs, &nir->num_inputs, glsl_type_size);
 
-	/* Lower I/O before the vertex epilogue as well */
-	bool progress;
-	NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
+	/* Lower vars -- not I/O -- before epilogue */
+
 	NIR_PASS(progress, nir, nir_lower_var_copies);
 	NIR_PASS(progress, nir, nir_lower_vars_to_ssa);
-	NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
 
 	/* Append vertex epilogue before optimisation, so the epilogue itself
 	 * is optimised */
 
+	nir_print_shader(nir, stdout);
 	if (ctx->stage == MESA_SHADER_VERTEX)
 		append_vertex_epilogue(nir);
+
+	/* But lower I/O -after- the vertex epilogue */
+	NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
+	NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
 
 	/* Optimisation passes */
 
