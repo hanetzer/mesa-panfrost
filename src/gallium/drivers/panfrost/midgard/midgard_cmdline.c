@@ -1243,103 +1243,29 @@ emit_vertex_epilogue(nir_builder *b, nir_ssa_def *input_point)
 	nir_builder_instr_insert(b, &store->instr);
 }
 
-/* XXX: From nir_lower_clip.c, genericise the code before merging XXX FIXME */
-static nir_ssa_def *
-find_output_in_block(nir_block *block, unsigned drvloc)
-{
-   nir_foreach_instr(instr, block) {
-
-      if (instr->type == nir_instr_type_intrinsic) {
-         nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
-         if ((intr->intrinsic == nir_intrinsic_store_output) &&
-             nir_intrinsic_base(intr) == drvloc) {
-            assert(intr->src[0].is_ssa);
-            assert(nir_src_as_const_value(intr->src[1]));
-            return intr->src[0].ssa;
-         }
-      }
-   }
-
-   return NULL;
-}
-
-/* TODO: maybe this would be a useful helper?
- * NOTE: assumes each output is written exactly once (and unconditionally)
- * so if needed nir_lower_outputs_to_temporaries()
- */
-static nir_ssa_def *
-find_output(nir_shader *shader, unsigned drvloc)
-{
-	printf("Finding %d\n", drvloc);
-   nir_ssa_def *def = NULL;
-   nir_foreach_function(function, shader) {
-      if (function->impl) {
-         nir_foreach_block_reverse(block, function->impl) {
-            nir_ssa_def *new_def = find_output_in_block(block, drvloc);
-            assert(!(new_def && def));
-            def = new_def;
-#if !defined(DEBUG)
-            /* for debug builds, scan entire shader to assert
-             * if output is written multiple times.  For release
-             * builds just assume all is well and bail when we
-             * find first:
-             */
-            if (def)
-               break;
-#endif
-         }
-      }
-   }
-
-   return def;
-}
-
 static void
 append_vertex_epilogue(nir_shader *shader)
 {
-	nir_ssa_def *gl_Position;
-
-	/* First, find gl_Position for later pass */
-
-#if 0
-	nir_foreach_variable(var, &shader->outputs) {
-		if (var->data.location == VARYING_SLOT_POS)
-			gl_Position = find_output(shader, var->data.driver_location);
-	}
-
-	if (!gl_Position) {
-		printf("gl_Position not written in vertex shader\n");
-		return;
-	}
-#endif
-
 	nir_foreach_function(func, shader) {
 		nir_foreach_block(block, func->impl) {
 			nir_foreach_instr_safe(instr, block) {
 				if (instr->type == nir_instr_type_intrinsic) {
 					nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
-					nir_variable *out = NULL;
-					printf("intrins\n");
 
 					if (intr->intrinsic == nir_intrinsic_store_var) {
-						printf("store\n");
-						out = intr->variables[0]->var;
+						nir_variable *out = intr->variables[0]->var;
 
 						if (out->data.mode != nir_var_shader_out)
 							continue;
 
-						printf("out\n");
-
 						if (out->data.location != VARYING_SLOT_POS)
 							continue;
-
-						printf("pos\n");
-						gl_Position = intr->src[0].ssa;
 
 						nir_builder b;
 						nir_builder_init(&b, func->impl);
 						b.cursor = nir_before_instr(&intr->instr);
-						emit_vertex_epilogue(&b, gl_Position);
+
+						emit_vertex_epilogue(&b, intr->src[0].ssa);
 					}
 				}
 			}
