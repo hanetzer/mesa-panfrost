@@ -706,21 +706,18 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 
 				alias_ssa(ctx, 0, reg, true);
 			} else if (ctx->stage == MESA_SHADER_VERTEX) {
-				/* Either this is a write from the perspective
-				 * division / viewport scaling code and should
-				 * be translated to the special output
-				 * register, or otherwise it's just a varying
-				 * */
+				/* Varyings are written into the special
+				 * varying register and then a magic value of 1
+				 * is used in the st_vary instruction */
 
-				if (nir_intrinsic_base(instr) == VERTEX_EPILOGUE_BASE) {
-					alias_ssa(ctx, REGISTER_VERTEX, reg, true);
-				} else {
-					reg = 1; /* XXX WTF WTF WTF WHY DOES THIS WORK WTF */
+				EMIT(fmov, reg, blank_alu_src, 27, true, midgard_outmod_none);
+				//alias_ssa(ctx, REGISTER_VERTEX, reg,
+				//		true);
 
-					midgard_instruction ins = m_store_vary_32(reg, offset);
-					ins.load_store.unknown = 0x1E9E; /* XXX: What is this? */
-					util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
-				}
+				midgard_instruction ins = m_store_vary_32(1, offset);
+				ins.load_store.unknown = 0x1E9E; /* XXX: What is this? */
+				ins.uses_ssa = false;
+				util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 			} else {
 				printf("Unknown store\n");
 				util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32(reg, offset));
@@ -1090,6 +1087,7 @@ eliminate_constant_mov(compiler_context *ctx)
 		 * cannot be removed. Similarly, if it -will- be a literal move
 		 * based on register_to_ssa, it cannot be removed. */
 		
+		if (!move->uses_ssa) continue;
 		if (move->ssa_args.literal_out) continue;
 		if (_mesa_hash_table_u64_search(ctx->register_to_ssa, move->ssa_args.dest)) continue;
 
@@ -1169,6 +1167,8 @@ static void
 actualise_ssa_to_alias(compiler_context *ctx)
 {
 	util_dynarray_foreach(&ctx->current_block, midgard_instruction, ins) {
+		if (!ins->uses_ssa) continue;
+
 		map_ssa_to_alias(ctx, &ins->ssa_args.src0);
 		map_ssa_to_alias(ctx, &ins->ssa_args.src1);
 	}
@@ -1236,7 +1236,7 @@ emit_vertex_epilogue(nir_builder *b, nir_ssa_def *input_point)
 	nir_intrinsic_instr *store;
 	store = nir_intrinsic_instr_create(b->shader, nir_intrinsic_store_output);
 	store->num_components = 4;
-	nir_intrinsic_set_base(store, VERTEX_EPILOGUE_BASE);
+	nir_intrinsic_set_base(store, 0);
 	nir_intrinsic_set_write_mask(store, 0xf);
 	store->src[0].ssa = transformed_point;
 	store->src[0].is_ssa = true;
@@ -1381,7 +1381,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 			}
 
 			/* Workaround hardware quirk */
-			defer_stores(ctx);
+			//defer_stores(ctx);
 
 			/* Artefact of load_const, etc in the average case */
 			inline_alu_constants(ctx);
