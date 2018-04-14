@@ -40,6 +40,8 @@
 #include "main/imports.h"
 #include "compiler/nir/nir_builder.h"
 
+bool c_do_mat_op_to_vec(struct exec_list *instructions);
+
 #include "midgard.h"
 
 /* Instruction arguments represented as block-local SSA indices, rather than
@@ -1561,6 +1563,13 @@ int main(int argc, char **argv)
 
 	prog = standalone_compile_shader(&options, 2, &argv[1]);
 	prog->_LinkedShaders[MESA_SHADER_FRAGMENT]->Program->info.stage = MESA_SHADER_FRAGMENT;
+
+	for (unsigned i = 0; i < MESA_SHADER_STAGES; ++i) {
+		if (prog->_LinkedShaders[i] == NULL)
+			continue;
+
+		c_do_mat_op_to_vec(prog->_LinkedShaders[i]->ir);
+	}
 
 	struct util_dynarray compiled;
 
