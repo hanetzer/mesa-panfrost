@@ -839,6 +839,33 @@ emit_binary_vector_instruction(midgard_instruction *ains,
 	*bytes_emitted += sizeof(midgard_vector_alu_t);
 }
 
+static int
+effective_ld_st_reg(midgard_load_store_word_t *ldst)
+{
+	if (OP_IS_STORE(ldst->op))
+		return REGISTER_VARYING;
+	else
+		return ldst->reg;
+}
+
+/* Checks for a data hazard between two adjacent ld_st instructions to see if
+ * they can run in parallel for VLIW */
+
+static bool
+can_ld_st_run_concurrent(midgard_load_store_word_t *first,
+			 midgard_load_store_word_t *second)
+{
+	/* No registers are touched for the case of two stores, therefore no
+	 * hazard. */
+
+	if (OP_IS_STORE(first) && OP_IS_STORE(second))
+		return true;
+
+	/* If one is a load, the data hazard comes up iff the two instructions write to the same place, */
+
+	return effective_ld_st_reg(first) != effective_ld_st_reg(second);
+}
+
 /* Returns the number of instructions emitted (minus one). In trivial cases,
  * this equals one (zero returned), but when instructions are paired (the
  * optimal case) this can be two, or in the best case for ALUs, up to five. */
@@ -975,10 +1002,10 @@ skip_instruction:
 			/* Load store instructions have two words at once. If we
 			 * only have one queued up, we need to NOP pad.
 			 * Otherwise, we store both in succession to save space
-			 * (and cycles? Unclear) and skip the next. The
-			 * usefulness of this optimisation is greatly dependent
-			 * on the quality of the (presently nonexistent)
-			 * instruction scheduler.
+			 * and cycles -- letting them go in parallel -- skip
+			 * the next. The usefulness of this optimisation is
+			 * greatly dependent on the quality of the (presently
+			 * nonexistent) instruction scheduler.
 			 */
 
 			uint64_t current64, next64;
@@ -991,11 +1018,10 @@ skip_instruction:
 			if ((ins + 1)->type == TAG_LOAD_STORE_4) {
 				midgard_load_store_word_t next = (ins + 1)->load_store;
 
-				/* As the two operate concurrently (TODO:
-				 * verify), make sure they are not dependent */
+				/* As the two operate concurrently, make sure
+				 * they are not dependent */
 
-				if (!(OP_IS_STORE(next.op) && !OP_IS_STORE(current.op) &&
-				      next.reg == current.reg)) {
+				if (can_ld_st_run_concurrent(&current, &next)) {
 					memcpy(&next64, &next, sizeof(next));
 
 					/* Skip ahead one, since it's redundant with the pair */
