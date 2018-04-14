@@ -1100,6 +1100,9 @@ eliminate_constant_mov(compiler_context *ctx)
 		for (midgard_instruction *candidate = (move + 1);
 		     IN_ARRAY(candidate, ctx->current_block);
 		     candidate += 1) {
+			/* If not using SSA, the sources are meaningless here */
+			if (!candidate->uses_ssa) continue;
+
 			/* Check this candidate for usage */
 
 			if (candidate->ssa_args.src0 == target_reg ||
