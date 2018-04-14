@@ -710,7 +710,13 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				 * varying register and then a magic value of 1
 				 * is used in the st_vary instruction */
 
-				//alias_ssa(ctx, REGISTER_VARYING, reg, true);
+				/* Normally emitting fmov's is frowned upon,
+				 * but due to unique constraints of
+				 * REGISTER_VARYING, fmov emission + a
+				 * dedicated cleanup pass is the only way to
+				 * guarantee correctness when considering some
+				 * (common) edge cases */
+
 				EMIT(fmov, reg, blank_alu_src, REGISTER_VARYING, true, midgard_outmod_none);
 
 				midgard_instruction ins = m_store_vary_32(1, offset);
@@ -1153,23 +1159,13 @@ eliminate_varying_mov(compiler_context *ctx)
 	util_dynarray_foreach(&ctx->current_block, midgard_instruction, move) {
 		/* Only interest ourselves with fmov instructions */
 		
-		printf("A\n");
 		if (move->type != TAG_ALU_4) continue;
 		if (move->vector && move->vector_alu.op != midgard_alu_op_fmov) continue;
 		if (!move->vector && move->scalar_alu.op != midgard_alu_op_fmov) continue;
-		printf("B\n");
-		printf("Move (%d, %d, %d), %d\n",
-				move->ssa_args.src0,
-				move->ssa_args.src1,
-				move->ssa_args.dest,
-				move->ssa_args.literal_out);
 		if (!move->ssa_args.literal_out) continue;
-		printf("B.5\n");
 		if (!move->ssa_args.dest == REGISTER_VARYING) continue;
-		printf("C\n");
 
 		int source = move->ssa_args.src1;
-		printf("Varying source %d\n", source);
 
 		/* Scan the succeeding instructions for usage */
 
@@ -1188,7 +1184,6 @@ eliminate_varying_mov(compiler_context *ctx)
 
 			if (candidate->ssa_args.src0 == source ||
 			    candidate->ssa_args.src1 == source) {
-				printf("It's used... oh well\n");
 				used = true;
 				break;
 			}
@@ -1201,21 +1196,17 @@ eliminate_varying_mov(compiler_context *ctx)
 			for (midgard_instruction *candidate = (move - 1);
 			     candidate >= ctx->current_block.data;
 			     candidate -= 1) {
-				printf("Candidate...\n");
 				if (!candidate->uses_ssa) continue;
-				printf("a...\n");
+
 				if (candidate->ssa_args.literal_out) continue;
-				printf("B... %d vs %d\n", candidate->ssa_args.dest, source);
 
 				if (candidate->ssa_args.dest == source) {
 					candidate->ssa_args.dest = move->ssa_args.dest;
 					candidate->ssa_args.literal_out = true;
 					move->unused = true;
-					printf("Inlined\n");
 					break;
 				}
 			}
-			printf("You should inline ...\n");
 		}
 	}
 }
