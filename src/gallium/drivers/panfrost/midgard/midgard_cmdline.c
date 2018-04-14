@@ -210,12 +210,6 @@ scalar_move_src(int component, bool full) {
 	return scalar_alu_src_to_unsigned(src);
 }
 
-static midgard_outmod_e
-n2m_alu_outmod(bool saturate)
-{
-	return saturate ? midgard_outmod_sat : midgard_outmod_none;
-}
-
 static midgard_instruction
 m_alu_vector(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_src_t mod1, unsigned src1, midgard_vector_alu_src_t mod2, unsigned dest, bool literal_out, midgard_outmod_e outmod)
 {
@@ -576,7 +570,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 	}
 
 	/* Initialise fields common between scalar/vector instructions */
-	midgard_outmod_e outmod = n2m_alu_outmod(instr->dest.saturate);
+	midgard_outmod_e outmod = instr->dest.saturate ? midgard_outmod_sat : midgard_outmod_none;
 
 	/* src0 will always exist afaik, but src1 will not for 1-argument
 	 * instructions. The latter can only be fetched if the instruction
