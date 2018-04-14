@@ -710,7 +710,8 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				 * varying register and then a magic value of 1
 				 * is used in the st_vary instruction */
 
-				alias_ssa(ctx, REGISTER_VARYING, reg, true);
+				//alias_ssa(ctx, REGISTER_VARYING, reg, true);
+				EMIT(fmov, reg, blank_alu_src, REGISTER_VARYING, true, midgard_outmod_none);
 
 				midgard_instruction ins = m_store_vary_32(1, offset);
 				ins.load_store.unknown = 0x1E9E; /* XXX: What is this? */
@@ -1144,6 +1145,83 @@ eliminate_constant_mov(compiler_context *ctx)
 	}
 }
 
+/* Similarly, for varyings we have to emit a move (due to decay), but we can often inline it */
+
+static void
+eliminate_varying_mov(compiler_context *ctx)
+{
+	util_dynarray_foreach(&ctx->current_block, midgard_instruction, move) {
+		/* Only interest ourselves with fmov instructions */
+		
+		printf("A\n");
+		if (move->type != TAG_ALU_4) continue;
+		if (move->vector && move->vector_alu.op != midgard_alu_op_fmov) continue;
+		if (!move->vector && move->scalar_alu.op != midgard_alu_op_fmov) continue;
+		printf("B\n");
+		printf("Move (%d, %d, %d), %d\n",
+				move->ssa_args.src0,
+				move->ssa_args.src1,
+				move->ssa_args.dest,
+				move->ssa_args.literal_out);
+		if (!move->ssa_args.literal_out) continue;
+		printf("B.5\n");
+		if (!move->ssa_args.dest == REGISTER_VARYING) continue;
+		printf("C\n");
+
+		int source = move->ssa_args.src1;
+		printf("Varying source %d\n", source);
+
+		/* Scan the succeeding instructions for usage */
+
+		bool used = false;
+
+		for (midgard_instruction *candidate = ctx->current_block.data;
+		     IN_ARRAY(candidate, ctx->current_block);
+		     candidate += 1) {
+			/* If not using SSA, the sources are meaningless here */
+			if (!candidate->uses_ssa) continue;
+			
+			/* Tonto special case but yeah */
+			if (candidate == move) continue;
+
+			/* Check this candidate for usage */
+
+			if (candidate->ssa_args.src0 == source ||
+			    candidate->ssa_args.src1 == source) {
+				printf("It's used... oh well\n");
+				used = true;
+				break;
+			}
+		}
+
+		/* At this point, we know if the move is used or not. If it's
+		 * not, inline it! */
+
+		if (!used) {
+			for (midgard_instruction *candidate = (move - 1);
+			     candidate >= ctx->current_block.data;
+			     candidate -= 1) {
+				printf("Candidate...\n");
+				if (!candidate->uses_ssa) continue;
+				printf("a...\n");
+				if (candidate->ssa_args.literal_out) continue;
+				printf("B... %d vs %d\n", candidate->ssa_args.dest, source);
+
+				if (candidate->ssa_args.dest == source) {
+					candidate->ssa_args.dest = move->ssa_args.dest;
+					candidate->ssa_args.literal_out = true;
+					move->unused = true;
+					printf("Inlined\n");
+					break;
+				}
+			}
+			printf("You should inline ...\n");
+		}
+	}
+}
+
+
+
 /* Map normal SSA sources to other SSA sources / fixed registers (like
  * uniforms) */
 
@@ -1350,6 +1428,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 			/* Artefact of load_const, etc in the average case */
 			inline_alu_constants(ctx);
 			eliminate_constant_mov(ctx);
+			eliminate_varying_mov(ctx);
 
 			/* Perform heavylifting for aliasing */
 			actualise_ssa_to_alias(ctx);
