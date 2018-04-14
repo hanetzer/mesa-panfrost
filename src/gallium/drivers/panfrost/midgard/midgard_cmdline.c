@@ -659,8 +659,11 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			assert (const_offset && "no indirect inputs");
 
 			offset = nir_intrinsic_base(instr) + const_offset->u32[0];
+			printf("Base: %d + offset %d\n", nir_intrinsic_base(instr), const_offset->u32[0]);
+			/* 
 			assert(offset % 4 == 0);
 			offset = offset / 4;
+			*/
 
 			reg = instr->dest.ssa.index;
 
@@ -1392,6 +1395,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 	/* Assign var locations early, so the epilogue can use them if necessary */
 	nir_assign_var_locations(&nir->outputs, &nir->num_outputs, glsl_type_size);
 	nir_assign_var_locations(&nir->inputs, &nir->num_inputs, glsl_type_size);
+	nir_assign_var_locations(&nir->uniforms, &nir->num_uniforms, glsl_type_size);
 
 	/* Lower vars -- not I/O -- before epilogue */
 
