@@ -261,7 +261,6 @@ m_alu_vector(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_sr
  * don't support half-floats -- this requires changes in other parts of the
  * compiler -- therefore the 16-bit versions are commented out. */
 
-//M_LOAD(ld_st_noop);
 //M_LOAD(load_attr_16);
 M_LOAD(load_attr_32);
 //M_LOAD(load_vary_16);
@@ -273,9 +272,6 @@ M_STORE(store_vary_32);
 
 /* Used as a sort of intrinsic outside of the ALU code */
 M_ALU_VECTOR_1(MUL, fmov);
-
-/* TODO: Expand into constituent parts since we do understand how this works,
- * no? */
 
 static midgard_instruction
 v_alu_br_compact_cond(midgard_jmp_writeout_op_e op, unsigned tag, signed offset, unsigned cond)
