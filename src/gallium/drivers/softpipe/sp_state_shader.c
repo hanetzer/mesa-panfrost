@@ -242,41 +242,7 @@ softpipe_set_constant_buffer(struct pipe_context *pipe,
                              const struct pipe_constant_buffer *cb)
 {
    struct softpipe_context *softpipe = softpipe_context(pipe);
-   struct pipe_resource *constants = cb ? cb->buffer : NULL;
-   unsigned size;
-   const void *data;
-
-   assert(shader < PIPE_SHADER_TYPES);
-
-   if (cb && cb->user_buffer) {
-      constants = softpipe_user_buffer_create(pipe->screen,
-                                              (void *) cb->user_buffer,
-                                              cb->buffer_size,
-                                              PIPE_BIND_CONSTANT_BUFFER);
-   }
-
-   size = cb ? cb->buffer_size : 0;
-   data = constants ? softpipe_resource_data(constants) : NULL;
-   if (data)
-      data = (const char *) data + cb->buffer_offset;
-
-   draw_flush(softpipe->draw);
-
-   /* note: reference counting */
-   pipe_resource_reference(&softpipe->constants[shader][index], constants);
-
-   if (shader == PIPE_SHADER_VERTEX || shader == PIPE_SHADER_GEOMETRY) {
-      draw_set_mapped_constant_buffer(softpipe->draw, shader, index, data, size);
-   }
-
-   softpipe->mapped_constants[shader][index] = data;
-   softpipe->const_buffer_size[shader][index] = size;
-
-   softpipe->dirty |= SP_NEW_CONSTANTS;
-
-   if (cb && cb->user_buffer) {
-      pipe_resource_reference(&constants, NULL);
-   }
+   softpipe->panfrost->set_constant_buffer(softpipe->panfrost, shader, index, cb);
 }
 
 static void *
