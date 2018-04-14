@@ -269,6 +269,9 @@ __attribute__((__packed__))
 
 /* Special register aliases */
 
+/* Uniforms are begin at (REGISTER_UNIFORMS - uniform_count) */
+#define REGISTER_UNIFORMS 24
+
 #define REGISTER_UNUSED 24
 #define REGISTER_CONSTANT 26
 #define REGISTER_OFFSET 27

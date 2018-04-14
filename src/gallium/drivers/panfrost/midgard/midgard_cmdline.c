@@ -313,6 +313,9 @@ attach_constants(midgard_instruction *ins, void *constants)
 typedef struct compiler_context {
 	gl_shader_stage stage;
 
+	/* Base register for immediate access uniforms */
+	int uniform_base;
+
 	/* List of midgard_instructions emitted for the current block */
 	struct util_dynarray current_block;
 
@@ -659,11 +662,6 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			assert (const_offset && "no indirect inputs");
 
 			offset = nir_intrinsic_base(instr) + const_offset->u32[0];
-			printf("Base: %d + offset %d\n", nir_intrinsic_base(instr), const_offset->u32[0]);
-			/* 
-			assert(offset % 4 == 0);
-			offset = offset / 4;
-			*/
 
 			reg = instr->dest.ssa.index;
 
@@ -672,10 +670,9 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 
 			if (instr->intrinsic == nir_intrinsic_load_uniform) {
 				/* TODO: half-floats */
-				/* TODO: Wrong order, plus how do we know how many? */
 				/* TODO: Spill to ld_uniform */
 
-				int reg_slot = 23 - offset;
+				int reg_slot = ctx->uniform_base + offset;
 				
 				/* Uniform accesses are 0-cycle, since they're
 				 * just a register fetch in the usual case. So,
@@ -1418,6 +1415,9 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 	nir_print_shader(nir, stdout);
 	optimise_nir(nir);
 	nir_print_shader(nir, stdout);
+
+	/* TODO: Spilling */
+	ctx->uniform_base = REGISTER_UNIFORMS - nir->num_uniforms;
 
 	nir_foreach_function(func, nir) {
 		if (!func->impl)
