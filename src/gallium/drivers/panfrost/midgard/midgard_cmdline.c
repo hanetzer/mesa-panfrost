@@ -1222,6 +1222,13 @@ skip:
 
 /* Shader epilogues */
 
+/* The function of the vertex "epilogue" is to rewrite gl_Position varying
+ * writes into gl_Position' varying writes, which include a transformation to
+ * screen-space coordinates. This transformation occurs early on, as NIR and
+ * prior to optimisation, in order to take advantage of NIR optimisation passes
+ * of the "epilogue" itself. Amusingly, the "epilogue" need not occur at the
+ * end, although this is typical for scheduling reasons. */
+
 static void
 emit_vertex_epilogue(nir_builder *b, nir_ssa_def *input_point)
 {
@@ -1266,6 +1273,7 @@ append_vertex_epilogue(nir_shader *shader)
 						b.cursor = nir_before_instr(&intr->instr);
 
 						emit_vertex_epilogue(&b, intr->src[0].ssa);
+						nir_instr_remove(instr);
 					}
 				}
 			}
@@ -1277,7 +1285,7 @@ append_vertex_epilogue(nir_shader *shader)
 static void
 emit_fragment_epilogue(compiler_context *ctx)
 {
-	/* See the docs for why this works */
+	/* See the docs for why this works. TODO: gl_FragDepth */
 
 	EMIT(alu_br_compact_cond, midgard_jmp_writeout_op_writeout, TAG_ALU_4, 0, COND_FBWRITE);
 	EMIT(alu_br_compact_cond, midgard_jmp_writeout_op_writeout, TAG_ALU_4, -1, COND_FBWRITE);
