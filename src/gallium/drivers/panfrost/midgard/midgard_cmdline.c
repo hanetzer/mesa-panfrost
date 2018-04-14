@@ -710,9 +710,7 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				 * varying register and then a magic value of 1
 				 * is used in the st_vary instruction */
 
-				EMIT(fmov, reg, blank_alu_src, REGISTER_VARYING, true, midgard_outmod_none);
-				//alias_ssa(ctx, REGISTER_VERTEX, reg,
-				//		true);
+				alias_ssa(ctx, REGISTER_VARYING, reg, true);
 
 				midgard_instruction ins = m_store_vary_32(1, offset);
 				ins.load_store.unknown = 0x1E9E; /* XXX: What is this? */
@@ -1191,6 +1189,12 @@ actualise_register_to_ssa(compiler_context *ctx)
 			ins->ssa_args.dest = reg - 1;
 			ins->ssa_args.literal_out = true;
 		}
+
+		/* Certain registers "decay" after their first alias, among
+		 * them REGISTER_VARYING, since they're not real work
+		 * registers. Remove these from the hash table to prevent
+		 * further aliasing / enabling? Wait, that doesn't necessarily
+		 * work. Sheep. XXX XXX XXX TODO FIXME */
 	}
 }
 
