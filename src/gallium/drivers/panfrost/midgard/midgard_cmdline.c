@@ -508,9 +508,9 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		ALU_CASE(MUL, 1, fmov, fmov);
 		ALU_CASE(MUL, 1, ffloor, ffloor);
 		ALU_CASE(MUL, 1, fceil, fceil);
-		//ALU_CASE(MUL, 2, fdot3);
+		ALU_CASE(MUL, 2, fdot3, fdot3);
 		//ALU_CASE(MUL, 2, fdot3r);
-		//ALU_CASE(MUL, 2, fdot4);
+		ALU_CASE(MUL, 2, fdot4, fdot4);
 		//ALU_CASE(MUL, 2, freduce);
 		ALU_CASE(ADD, 2, iadd, iadd);
 		ALU_CASE(ADD, 2, isub, isub);
@@ -561,6 +561,18 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 
 	if (unit == UNIT_LUT)
 		is_vector = true;
+
+	/* Certain ops (dot products, etc) write out to a single component but
+	 * require vector; force this */
+
+	switch(instr->op) {
+		case nir_op_fdot3:
+		case nir_op_fdot4:
+			is_vector = true;
+
+		default:
+			break;
+	}
 
 	/* Initialise fields common between scalar/vector instructions */
 	midgard_outmod_e outmod = n2m_alu_outmod(instr->dest.saturate);
