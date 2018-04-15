@@ -325,6 +325,13 @@ typedef struct compiler_context {
 	
 	/* Encoded the same as ssa_to_alias, except now it's mapping SSA source indicdes as the keys to fixed destination registers as the values */
 	struct hash_table_u64 *register_to_ssa;
+
+	/* Actual SSA-to-register for RA */
+	struct hash_table_u64 *ssa_to_register;
+
+	/* Prior to actual RA, we'll use watermark allocation; this is the
+	 * counter in question */
+	int watermark_register;
 } compiler_context;
 
 static int
@@ -749,16 +756,32 @@ emit_instr(compiler_context *ctx, struct nir_instr *instr)
 
 /* TODO: Write a register allocator. But for now, just set register = ssa index... */
 
+static int
+normal_ssa_to_register(compiler_context *ctx, int ssa)
+{
+	int reg = _mesa_hash_table_u64_search(ctx->ssa_to_register, ssa);
+
+	if (reg) {
+		reg -= 1; /* Intentional off-by-one */
+	} else {
+		/* XXX: Proper register allocation */
+		reg = ctx->watermark_register++;
+		_mesa_hash_table_u64_insert(ctx->ssa_to_register, ssa, (void *) (uintptr_t) (reg + 1));
+	}
+
+	return reg;
+}
+
 /* Transform to account for SSA register aliases */
 
 static int
-dealias_register(int reg)
+dealias_register(compiler_context *ctx, int reg, bool is_ssa)
 {
 	if (reg >= SSA_FIXED_MINIMUM)
 		return SSA_REG_FROM_FIXED(reg);
 
 	if (reg >= 0)
-		return reg;
+		return is_ssa ? normal_ssa_to_register(ctx, reg) : reg;
 
 	switch(reg) {
 		/* fmov style unused */
@@ -773,7 +796,6 @@ dealias_register(int reg)
 	}
 }
 
-
 static void
 allocate_registers(compiler_context *ctx)
 {
@@ -782,22 +804,24 @@ allocate_registers(compiler_context *ctx)
 
 		switch (ins->type) {
 			case TAG_ALU_4:
-				ins->registers.output_reg = dealias_register(args.dest);
-				ins->registers.input1_reg = dealias_register(args.src0);
+				ins->registers.output_reg = dealias_register(ctx, args.dest, ins->uses_ssa && !args.literal_out);
+				ins->registers.input1_reg = dealias_register(ctx, args.src0, ins->uses_ssa);
 
 				ins->registers.inline_2 = args.inline_constant;
 
 				if (args.inline_constant && args.src1 != 0) {
 					printf("TODO: Encode inline constant %d\n", args.src1);
 				} else {
-					ins->registers.input2_reg = dealias_register(args.src1);
+					ins->registers.input2_reg = dealias_register(ctx, args.src1, ins->uses_ssa);
 				}
 
 				break;
 			
-			case TAG_LOAD_STORE_4:
-				ins->load_store.reg = (args.dest >= 0) ? args.dest : args.src0;
+			case TAG_LOAD_STORE_4: {
+				int ssa_arg = (args.dest >= 0) ? args.dest : args.src0;
+				ins->load_store.reg = dealias_register(ctx, ssa_arg, ins->uses_ssa);
 				break;
+		        }
 
 			default: 
 				printf("Unknown tag in register assignment pass\n");
@@ -1055,7 +1079,7 @@ skip_instruction:
 \
 	if (entry) { \
 		attach_constants(alu, entry); \
-		alu->ssa_args.src = REGISTER_CONSTANT; \
+		alu->ssa_args.src = SSA_FIXED_REGISTER(REGISTER_CONSTANT); \
 	} \
 }
 
@@ -1387,6 +1411,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 			ctx->ssa_constants = _mesa_hash_table_u64_create(NULL); 
 			ctx->ssa_to_alias = _mesa_hash_table_u64_create(NULL); 
 			ctx->register_to_ssa = _mesa_hash_table_u64_create(NULL); 
+			ctx->ssa_to_register = _mesa_hash_table_u64_create(NULL); 
 			ctx->leftover_ssa_to_alias = _mesa_set_create(NULL, _mesa_hash_pointer, _mesa_key_pointer_equal);
 
 			nir_foreach_instr(instr, block) {
