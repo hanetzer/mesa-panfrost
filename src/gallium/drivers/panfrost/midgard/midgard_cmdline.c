@@ -754,10 +754,37 @@ emit_instr(compiler_context *ctx, struct nir_instr *instr)
 	}
 }
 
+/* XXX: This has really awful asymptomatic complexity. Fix it or switch to
+ * anholt's RA or something */
+
+#define IN_ARRAY(n, arr) (n < (arr.data + arr.size))
+
+static bool
+is_ssa_used_later(compiler_context *ctx, midgard_instruction *ins, int ssa)
+{
+	printf("Current %d, %d -> %d\n",
+			ins->ssa_args.src0,
+			ins->ssa_args.src1,
+			ins->ssa_args.dest);
+
+	for (midgard_instruction *candidate = ins + 1;
+	     IN_ARRAY(candidate, ctx->current_block);
+	     candidate += 1) {
+		if (!candidate->uses_ssa) continue;
+
+		printf("%d, %d vs %d\n", candidate->ssa_args.src0, candidate->ssa_args.src1, ssa);
+		if ((candidate->ssa_args.src0 == ssa) ||
+		    (candidate->ssa_args.src1 == ssa))
+			return true;
+	}
+
+	return false;
+}
+
 /* TODO: Write a register allocator. But for now, just set register = ssa index... */
 
 static int
-normal_ssa_to_register(compiler_context *ctx, int ssa)
+normal_ssa_to_register(compiler_context *ctx, midgard_instruction *ins, int ssa)
 {
 	int reg = _mesa_hash_table_u64_search(ctx->ssa_to_register, ssa);
 
@@ -769,19 +796,23 @@ normal_ssa_to_register(compiler_context *ctx, int ssa)
 		_mesa_hash_table_u64_insert(ctx->ssa_to_register, ssa, (void *) (uintptr_t) (reg + 1));
 	}
 
+	if (!is_ssa_used_later(ctx, ins, ssa)) {
+		printf("Free register %d (SSA %d)\n", reg, ssa);
+	}
+
 	return reg;
 }
 
 /* Transform to account for SSA register aliases */
 
 static int
-dealias_register(compiler_context *ctx, int reg, bool is_ssa)
+dealias_register(compiler_context *ctx, midgard_instruction *ins, int reg, bool is_ssa)
 {
 	if (reg >= SSA_FIXED_MINIMUM)
 		return SSA_REG_FROM_FIXED(reg);
 
 	if (reg >= 0)
-		return is_ssa ? normal_ssa_to_register(ctx, reg) : reg;
+		return is_ssa ? normal_ssa_to_register(ctx, ins, reg) : reg;
 
 	switch(reg) {
 		/* fmov style unused */
@@ -806,22 +837,22 @@ allocate_registers(compiler_context *ctx)
 
 		switch (ins->type) {
 			case TAG_ALU_4:
-				ins->registers.output_reg = dealias_register(ctx, args.dest, ins->uses_ssa && !args.literal_out);
-				ins->registers.input1_reg = dealias_register(ctx, args.src0, ins->uses_ssa);
+				ins->registers.output_reg = dealias_register(ctx, ins, args.dest, ins->uses_ssa && !args.literal_out);
+				ins->registers.input1_reg = dealias_register(ctx, ins, args.src0, ins->uses_ssa);
 
 				ins->registers.inline_2 = args.inline_constant;
 
 				if (args.inline_constant && args.src1 != 0) {
 					printf("TODO: Encode inline constant %d\n", args.src1);
 				} else {
-					ins->registers.input2_reg = dealias_register(ctx, args.src1, ins->uses_ssa);
+					ins->registers.input2_reg = dealias_register(ctx, ins, args.src1, ins->uses_ssa);
 				}
 
 				break;
 			
 			case TAG_LOAD_STORE_4: {
 				int ssa_arg = (args.dest >= 0) ? args.dest : args.src0;
-				ins->load_store.reg = dealias_register(ctx, ssa_arg, ins->uses_ssa);
+				ins->load_store.reg = dealias_register(ctx, ins, ssa_arg, ins->uses_ssa);
 				break;
 		        }
 
@@ -836,7 +867,6 @@ allocate_registers(compiler_context *ctx)
  * lookahead too. Unless this is the last instruction, in which we return 1. Or
  * if this is the second to last and the last is an ALU, then it's also 1... */
 
-#define IN_ARRAY(n, arr) (n < (arr.data + arr.size))
 #define IS_ALU(tag) (tag == TAG_ALU_4 || tag == TAG_ALU_8 ||  \
 		     tag == TAG_ALU_12 || tag == TAG_ALU_16)
 
