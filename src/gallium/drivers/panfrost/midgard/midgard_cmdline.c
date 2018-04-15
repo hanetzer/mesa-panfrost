@@ -731,8 +731,10 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 static void
 emit_instr(compiler_context *ctx, struct nir_instr *instr)
 {
+#ifdef NIR_DEBUG
 	nir_print_instr(instr, stdout);
 	putchar('\n');
+#endif
 
 	switch(instr->type) {
 		case nir_instr_type_load_const:
@@ -761,17 +763,11 @@ emit_instr(compiler_context *ctx, struct nir_instr *instr)
 static bool
 is_ssa_used_later(compiler_context *ctx, midgard_instruction *ins, int ssa)
 {
-	printf("Current %d, %d -> %d\n",
-			ins->ssa_args.src0,
-			ins->ssa_args.src1,
-			ins->ssa_args.dest);
-
 	for (midgard_instruction *candidate = ins + 1;
 	     IN_ARRAY(candidate, ctx->current_block);
 	     candidate += 1) {
 		if (!candidate->uses_ssa) continue;
 
-		printf("%d, %d vs %d\n", candidate->ssa_args.src0, candidate->ssa_args.src1, ssa);
 		if ((candidate->ssa_args.src0 == ssa) ||
 		    (candidate->ssa_args.src1 == ssa))
 			return true;
@@ -809,10 +805,10 @@ normal_ssa_to_register(compiler_context *ctx, midgard_instruction *ins, int ssa)
 		_mesa_hash_table_u64_insert(ctx->ssa_to_register, ssa, (void *) (uintptr_t) (reg + 1));
 	}
 
-	if (!is_ssa_used_later(ctx, ins, ssa)) {
+	/* Free the register if possible */
+
+	if (!is_ssa_used_later(ctx, ins, ssa))
 		ctx->used_registers &= ~(1 << reg);
-		printf("Free register %d (SSA %d)\n", reg, ssa);
-	}
 
 	return reg;
 }
@@ -1432,8 +1428,6 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 	/* Append vertex epilogue before optimisation, so the epilogue itself
 	 * is optimised */
 
-	nir_print_shader(nir, stdout);
-
 	if (ctx->stage == MESA_SHADER_VERTEX)
 		transform_position_writes(nir);
 
@@ -1443,9 +1437,15 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 	/* Optimisation passes */
 
+#ifdef NIR_DEBUG
 	nir_print_shader(nir, stdout);
+#endif
+
 	optimise_nir(nir);
+
+#ifdef NIR_DEBUG
 	nir_print_shader(nir, stdout);
+#endif
 
 	/* TODO: Spilling */
 	ctx->uniform_base = REGISTER_UNIFORMS - nir->num_uniforms;
