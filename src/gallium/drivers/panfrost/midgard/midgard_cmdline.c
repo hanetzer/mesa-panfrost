@@ -396,7 +396,7 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 	memcpy(v, &instr->value.f32, 4 * sizeof(float));
 	_mesa_hash_table_u64_insert(ctx->ssa_constants, def.index, v);
 
-	midgard_instruction ins = v_fmov(REGISTER_CONSTANT, blank_alu_src, def.index, false, midgard_outmod_none);
+	midgard_instruction ins = v_fmov(SSA_FIXED_REGISTER(REGISTER_CONSTANT), blank_alu_src, def.index, false, midgard_outmod_none);
 	attach_constants(&ins, &instr->value.f32);
 	util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 }
@@ -800,6 +800,8 @@ static void
 allocate_registers(compiler_context *ctx)
 {
 	util_dynarray_foreach(&ctx->current_block, midgard_instruction, ins) {
+		if (ins->unused) continue;
+
 		ssa_args args = ins->ssa_args;
 
 		switch (ins->type) {
