@@ -329,9 +329,8 @@ typedef struct compiler_context {
 	/* Actual SSA-to-register for RA */
 	struct hash_table_u64 *ssa_to_register;
 
-	/* Prior to actual RA, we'll use watermark allocation; this is the
-	 * counter in question */
-	int watermark_register;
+	/* Active register bitfield for RA */
+	unsigned used_registers : 16;
 } compiler_context;
 
 static int
@@ -781,7 +780,21 @@ is_ssa_used_later(compiler_context *ctx, midgard_instruction *ins, int ssa)
 	return false;
 }
 
-/* TODO: Write a register allocator. But for now, just set register = ssa index... */
+static int
+allocate_first_free_register(compiler_context *ctx)
+{
+	for (int i = 0; i < MAX_WORK_REGISTERS; ++i) {
+		bool used = ctx->used_registers & (1 << i);
+
+		if (used) continue;
+
+		ctx->used_registers |= (1 << i);
+		return i;
+	}
+
+	printf("OUT OF REGISTERS, NO SPILLING IMPLEMENTED"); /* XXX */
+	return 0;
+}
 
 static int
 normal_ssa_to_register(compiler_context *ctx, midgard_instruction *ins, int ssa)
@@ -792,11 +805,12 @@ normal_ssa_to_register(compiler_context *ctx, midgard_instruction *ins, int ssa)
 		reg -= 1; /* Intentional off-by-one */
 	} else {
 		/* XXX: Proper register allocation */
-		reg = ctx->watermark_register++;
+		reg = allocate_first_free_register(ctx);
 		_mesa_hash_table_u64_insert(ctx->ssa_to_register, ssa, (void *) (uintptr_t) (reg + 1));
 	}
 
 	if (!is_ssa_used_later(ctx, ins, ssa)) {
+		ctx->used_registers &= ~(1 << reg);
 		printf("Free register %d (SSA %d)\n", reg, ssa);
 	}
 
@@ -837,7 +851,6 @@ allocate_registers(compiler_context *ctx)
 
 		switch (ins->type) {
 			case TAG_ALU_4:
-				ins->registers.output_reg = dealias_register(ctx, ins, args.dest, ins->uses_ssa && !args.literal_out);
 				ins->registers.input1_reg = dealias_register(ctx, ins, args.src0, ins->uses_ssa);
 
 				ins->registers.inline_2 = args.inline_constant;
@@ -847,6 +860,9 @@ allocate_registers(compiler_context *ctx)
 				} else {
 					ins->registers.input2_reg = dealias_register(ctx, ins, args.src1, ins->uses_ssa);
 				}
+
+				/* Output register at the end due to the natural flow of registers, allowing for in place operations */
+				ins->registers.output_reg = dealias_register(ctx, ins, args.dest, ins->uses_ssa && !args.literal_out);
 
 				break;
 			

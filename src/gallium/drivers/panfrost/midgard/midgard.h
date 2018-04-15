@@ -269,6 +269,8 @@ __attribute__((__packed__))
 
 /* Special register aliases */
 
+#define MAX_WORK_REGISTERS 16
+
 /* Uniforms are begin at (REGISTER_UNIFORMS - uniform_count) */
 #define REGISTER_UNIFORMS 24
 
