@@ -303,3 +303,6 @@ __attribute__((__packed__))
 /* Output writing "condition" for the branch (all one's) */
 
 #define COND_FBWRITE 0x3
+
+/* See ISA notes */
+#define LDST_NOP (3)

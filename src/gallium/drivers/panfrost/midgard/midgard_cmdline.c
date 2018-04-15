@@ -338,14 +338,6 @@ optimise_nir(nir_shader *nir)
 {
 	bool progress;
 
-	//NIR_PASS_V(nir, nir_lower_io_to_temporaries, nir_shader_get_entrypoint(nir), true, true);
-	//NIR_PASS(progress, nir, nir_opt_global_to_local);
-	//NIR_PASS(progress, nir, nir_lower_regs_to_ssa);
-
-	//NIR_PASS(progress, nir, nir_lower_global_vars_to_local);
-	//NIR_PASS(progress, nir, nir_lower_locals_to_regs);
-	//NIR_PASS_V(nir, nir_lower_io_types);
-
 	do {
 		progress = false;
 
@@ -353,7 +345,6 @@ optimise_nir(nir_shader *nir)
 		NIR_PASS(progress, nir, nir_lower_var_copies);
 		NIR_PASS(progress, nir, nir_lower_vars_to_ssa);
 
-		//NIR_PASS(progress, nir, nir_lower_vec_to_movs);
 		NIR_PASS(progress, nir, nir_copy_prop);
 		NIR_PASS(progress, nir, nir_opt_remove_phis);
 		NIR_PASS(progress, nir, nir_opt_dce);
@@ -368,7 +359,6 @@ optimise_nir(nir_shader *nir)
 				nir_var_shader_out |
 				nir_var_local);
 	} while(progress);
-	printf("---\n");
 
 	NIR_PASS(progress, nir, nir_lower_to_source_mods);
 	NIR_PASS(progress, nir, nir_copy_prop);
@@ -655,9 +645,6 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 
 			reg = instr->dest.ssa.index;
 
-			/* What this means depends on the type of instruction */
-			/* TODO: Pack? */
-
 			if (instr->intrinsic == nir_intrinsic_load_uniform) {
 				/* TODO: half-floats */
 				/* TODO: Spill to ld_uniform */
@@ -672,22 +659,17 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				alias_ssa(ctx, reg, SSA_FIXED_REGISTER(reg_slot), false);
 			} else if (ctx->stage == MESA_SHADER_FRAGMENT) {
 				/* XXX: Half-floats? */
-				/* TODO: swizzle, mask, decode unknown */
+				/* TODO: swizzle, mask */
 
 				midgard_instruction ins = m_load_vary_32(reg, offset);
 				ins.load_store.unknown = 0xA01E9E; /* XXX: What is this? */
 				util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
-			} else if(ctx->stage == MESA_SHADER_VERTEX) {
+			} else if (ctx->stage == MESA_SHADER_VERTEX) {
 				midgard_instruction ins = m_load_attr_32(reg, offset);
 				ins.load_store.unknown = 0x1E1E; /* XXX: What is this? */
 				util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 			} else {
 				printf("Unknown load\n");
-
-				/* Worst case, emit a load varying and at least
-				 * that'll show up in the disassembly */
-
-				util_dynarray_append(&ctx->current_block, midgard_instruction, m_load_vary_32(reg, 0));
 			}
 
 			break;
@@ -712,9 +694,9 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			} else if (ctx->stage == MESA_SHADER_VERTEX) {
 				/* Varyings are written into the special
 				 * varying register and then a magic value of 1
-				 * is used in the st_vary instruction */
-
-				/* Normally emitting fmov's is frowned upon,
+				 * is used in the st_vary instruction.
+				 *
+				 * Normally emitting fmov's is frowned upon,
 				 * but due to unique constraints of
 				 * REGISTER_VARYING, fmov emission + a
 				 * dedicated cleanup pass is the only way to
@@ -729,7 +711,6 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 			} else {
 				printf("Unknown store\n");
-				util_dynarray_append(&ctx->current_block, midgard_instruction, m_store_vary_32(reg, offset));
 			}
 
 			break;
@@ -956,7 +937,7 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					memcpy(&body_words[body_words_count++], &ains->scalar_alu, sizeof(ains->scalar_alu));
 					bytes_emitted += sizeof(midgard_scalar_alu_t);
 
-					/* TODO: Emit pipeline registers and batch instructions once we know how XXX */
+					/* TODO: Emit pipeline registers and batch instructions */
 					++index;	
 					break;
 				}
@@ -1042,14 +1023,8 @@ skip_instruction:
 				}
 			}
 
-			if (!filled_next) {
-				/* While this is good reason for this number
-				 * (see the ISA notes), for our purposes we can
-				 * just use it as a magic number until it
-				 * breaks ;) */
-
-				next64 = 3;
-			}
+			if (!filled_next)
+				next64 = LDST_NOP;
 
 			midgard_load_store_t instruction = {
 				.tag = tag,
@@ -1288,26 +1263,18 @@ actualise_register_to_ssa(compiler_context *ctx)
 			ins->ssa_args.dest = reg - 1;
 			ins->ssa_args.literal_out = true;
 		}
-
-		/* Certain registers "decay" after their first alias, among
-		 * them REGISTER_VARYING, since they're not real work
-		 * registers. Remove these from the hash table to prevent
-		 * further aliasing / enabling? Wait, that doesn't necessarily
-		 * work. Sheep. XXX XXX XXX TODO FIXME */
 	}
 }
 
 /* Shader epilogues */
 
-/* The function of the vertex "epilogue" is to rewrite gl_Position varying
- * writes into gl_Position' varying writes, which include a transformation to
- * screen-space coordinates. This transformation occurs early on, as NIR and
- * prior to optimisation, in order to take advantage of NIR optimisation passes
- * of the "epilogue" itself. Amusingly, the "epilogue" need not occur at the
- * end, although this is typical for scheduling reasons. */
+/* Vertex shaders do not write gl_Position as is; instead, they write a
+ * transformed (screen space, etc) position as a varying. This transformation
+ * occurs early on, as NIR and prior to optimisation, in order to take
+ * advantage of NIR optimisation passes of the transform itself. */
 
 static void
-emit_vertex_epilogue(nir_builder *b, nir_ssa_def *input_point)
+write_transformed_position(nir_builder *b, nir_ssa_def *input_point)
 {
 	/* TODO: Don't assume 400x240 screen, nor 0.5, nor NDC input */
 	nir_ssa_def *window = nir_vec4(b, nir_imm_float(b, 200.0f), nir_imm_float(b, 120.0f), nir_imm_float(b, 0.5f), nir_imm_float(b, 0.0));
@@ -1328,7 +1295,7 @@ emit_vertex_epilogue(nir_builder *b, nir_ssa_def *input_point)
 }
 
 static void
-append_vertex_epilogue(nir_shader *shader)
+transform_position_writes(nir_shader *shader)
 {
 	nir_foreach_function(func, shader) {
 		nir_foreach_block(block, func->impl) {
@@ -1349,7 +1316,7 @@ append_vertex_epilogue(nir_shader *shader)
 						nir_builder_init(&b, func->impl);
 						b.cursor = nir_before_instr(&intr->instr);
 
-						emit_vertex_epilogue(&b, intr->src[0].ssa);
+						write_transformed_position(&b, intr->src[0].ssa);
 						nir_instr_remove(instr);
 					}
 				}
@@ -1380,6 +1347,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 	compiler_context *ctx = &ictx;
 
 	/* Assign var locations early, so the epilogue can use them if necessary */
+
 	nir_assign_var_locations(&nir->outputs, &nir->num_outputs, glsl_type_size);
 	nir_assign_var_locations(&nir->inputs, &nir->num_inputs, glsl_type_size);
 	nir_assign_var_locations(&nir->uniforms, &nir->num_uniforms, glsl_type_size);
@@ -1393,8 +1361,9 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 	 * is optimised */
 
 	nir_print_shader(nir, stdout);
+
 	if (ctx->stage == MESA_SHADER_VERTEX)
-		append_vertex_epilogue(nir);
+		transform_position_writes(nir);
 
 	/* But lower I/O -after- the vertex epilogue */
 	NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
