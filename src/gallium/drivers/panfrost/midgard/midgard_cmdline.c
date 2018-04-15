@@ -1446,10 +1446,6 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 	if (ctx->stage == MESA_SHADER_VERTEX)
 		transform_position_writes(nir);
 
-	/* But lower I/O -after- the vertex epilogue */
-	NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
-	NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
-
 	/* Optimisation passes */
 
 #ifdef NIR_DEBUG
