@@ -881,8 +881,12 @@ allocate_registers(compiler_context *ctx)
 				break;
 			
 			case TAG_LOAD_STORE_4: {
-				int ssa_arg = (args.dest >= 0) ? args.dest : args.src0;
-				ins->load_store.reg = dealias_register(ctx, ins, ssa_arg, ins->uses_ssa);
+				bool has_dest = args.dest >= 0;
+				int ssa_arg = has_dest ? args.dest : args.src0;
+				bool not_literal_out = has_dest ? !args.literal_out : true;
+
+				ins->load_store.reg = dealias_register(ctx, ins, ssa_arg, ins->uses_ssa && not_literal_out);
+
 				break;
 		        }
 
