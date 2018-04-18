@@ -45,7 +45,7 @@ bool c_do_mat_op_to_vec(struct exec_list *instructions);
 #include "midgard.h"
 
 // #define STAGE_PROFILING
-//#define NIR_DEBUG
+#define NIR_DEBUG
 
 #ifdef STAGE_PROFILING
 clock_t global_clock;
@@ -713,20 +713,23 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 
 				alias_ssa(ctx, 0, reg, true);
 			} else if (ctx->stage == MESA_SHADER_VERTEX) {
-				/* Varyings are written into the special
-				 * varying register and then a magic value of 1
-				 * is used in the st_vary instruction.
+				/* Varyings are written into one of two special
+				 * varying register, r26 or r27. The register itself is selected as the register 
+				 * in the st_vary instruction, minus the base of 26. E.g. write into r27 and then call st_vary(1)
 				 *
 				 * Normally emitting fmov's is frowned upon,
 				 * but due to unique constraints of
 				 * REGISTER_VARYING, fmov emission + a
 				 * dedicated cleanup pass is the only way to
 				 * guarantee correctness when considering some
-				 * (common) edge cases */
+				 * (common) edge cases XXX: FIXME */
 
-				EMIT(fmov, reg, blank_alu_src, REGISTER_VARYING, true, midgard_outmod_none);
+				/* TODO: Integrate with special purpose RA (and scheduler?) */
+				bool high_varying_register = false;
 
-				midgard_instruction ins = m_store_vary_32(1, offset);
+				EMIT(fmov, reg, blank_alu_src, REGISTER_VARYING_BASE + high_varying_register, true, midgard_outmod_none);
+
+				midgard_instruction ins = m_store_vary_32(high_varying_register, offset);
 				ins.load_store.unknown = 0x1E9E; /* XXX: What is this? */
 				ins.uses_ssa = false;
 				util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
@@ -918,7 +921,7 @@ static int
 effective_ld_st_reg(midgard_load_store_word_t *ldst)
 {
 	if (OP_IS_STORE(ldst->op))
-		return REGISTER_VARYING;
+		return REGISTER_VARYING_BASE + ldst->reg;
 	else
 		return ldst->reg;
 }
@@ -1225,7 +1228,7 @@ eliminate_varying_mov(compiler_context *ctx)
 		if (move->vector && move->vector_alu.op != midgard_alu_op_fmov) continue;
 		if (!move->vector && move->scalar_alu.op != midgard_alu_op_fmov) continue;
 		if (!move->ssa_args.literal_out) continue;
-		if (!move->ssa_args.dest == REGISTER_VARYING) continue;
+		if ((move->ssa_args.dest & ~1) != REGISTER_VARYING_BASE) continue;
 
 		int source = move->ssa_args.src1;
 

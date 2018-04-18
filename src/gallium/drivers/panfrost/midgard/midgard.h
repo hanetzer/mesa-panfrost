@@ -276,10 +276,9 @@ __attribute__((__packed__))
 
 #define REGISTER_UNUSED 24
 #define REGISTER_CONSTANT 26
+#define REGISTER_VARYING_BASE 26
 #define REGISTER_OFFSET 27
-#define REGISTER_VARYING 27
-#define REGISTER_TEXTURE_1 28
-#define REGISTER_TEXTURE_2 29
+#define REGISTER_TEXTIRE_BASE 28
 #define REGISTER_SELECT  31
 
 /* SSA helper aliases to mimic the registers. UNUSED_0 encoded as an inline
