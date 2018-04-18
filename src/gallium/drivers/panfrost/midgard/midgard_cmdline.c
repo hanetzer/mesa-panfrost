@@ -1359,17 +1359,53 @@ actualise_register_to_ssa(compiler_context *ctx)
 /* Shader epilogues */
 
 /* Vertex shaders do not write gl_Position as is; instead, they write a
- * transformed (screen space, etc) position as a varying. This transformation
+ * transformed screen space position as a varying. See section 12.5 "Coordinate
+ * Transformation" of the ES 3.2 full specification for details.
+ *
+ * This transformation
  * occurs early on, as NIR and prior to optimisation, in order to take
  * advantage of NIR optimisation passes of the transform itself. */
 
 static void
 write_transformed_position(nir_builder *b, nir_ssa_def *input_point)
 {
+	/* XXX: From uniforms? */
+	nir_ssa_def *viewport_width = nir_imm_float(b, 400.0);
+	nir_ssa_def *viewport_height = nir_imm_float(b, 240.0);
+	nir_ssa_def *viewport_center_x = nir_imm_float(b, 400.0 / 2.0f);
+	nir_ssa_def *viewport_center_y = nir_imm_float(b, 240.0 / 2.0f);
+	nir_ssa_def *depth_near = nir_imm_float(b, 0.0);
+	nir_ssa_def *depth_far = nir_imm_float(b, 1.0);
+
 	/* TODO: Don't assume 400x240 screen, nor 0.5, nor NDC input */
+#if 0
 	nir_ssa_def *window = nir_vec4(b, nir_imm_float(b, 200.0f), nir_imm_float(b, 120.0f), nir_imm_float(b, 0.5f), nir_imm_float(b, 0.0));
 	nir_ssa_def *persp = nir_vec4(b, nir_imm_float(b, 0), nir_imm_float(b, 0), nir_imm_float(b, 0), nir_imm_float(b, 1.0));
 	nir_ssa_def *transformed_point = nir_fadd(b, nir_fadd(b, nir_fmul(b, input_point, window), window), persp);
+#endif
+
+	/* XXX */
+	nir_ssa_def *ndc_point = input_point;
+
+	nir_ssa_def *viewport_multiplier = nir_vec4(b,
+			nir_fmul(b, viewport_width, nir_imm_float(b, 0.5f)),
+			nir_fmul(b, viewport_height, nir_imm_float(b, 0.5f)),
+			nir_imm_float(b, 0.0),
+			nir_imm_float(b, 0.0));
+
+	nir_ssa_def *viewport_offset = nir_vec4(b, 
+			viewport_center_x,
+			viewport_center_y,
+			nir_imm_float(b, 0.0),
+			nir_imm_float(b, 0.0));
+
+	nir_ssa_def *depth_multiplier = nir_fmul(b, nir_fsub(b, depth_far, depth_near), nir_imm_float(b, 0.5f));
+	nir_ssa_def *depth_offset     = nir_fmul(b, nir_fadd(b, depth_far, depth_near), nir_imm_float(b, 0.5f));
+	nir_ssa_def *screen_depth     = nir_fadd(b, nir_fmul(b, nir_channel(b, ndc_point, 2), depth_multiplier), depth_offset);
+
+	nir_ssa_def *screen_space =
+		nir_fadd(b, nir_fadd(b, nir_fmul(b, ndc_point, viewport_multiplier), viewport_offset),
+			    nir_vec4(b, nir_imm_float(b, 0.0), nir_imm_float(b, 0.0), screen_depth, nir_imm_float(b, 0.0)));
 
 	/* Finally, write out the transformed values to the varying */
 
@@ -1378,7 +1414,7 @@ write_transformed_position(nir_builder *b, nir_ssa_def *input_point)
 	store->num_components = 4;
 	nir_intrinsic_set_base(store, 0);
 	nir_intrinsic_set_write_mask(store, 0xf);
-	store->src[0].ssa = transformed_point;
+	store->src[0].ssa = screen_space;
 	store->src[0].is_ssa = true;
 	store->src[1] = nir_src_for_ssa(nir_imm_int(b, 0));
 	nir_builder_instr_insert(b, &store->instr);
