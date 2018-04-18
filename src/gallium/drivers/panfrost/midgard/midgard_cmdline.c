@@ -1356,20 +1356,19 @@ actualise_register_to_ssa(compiler_context *ctx)
 	}
 }
 
-/* Shader epilogues */
-
 /* Vertex shaders do not write gl_Position as is; instead, they write a
  * transformed screen space position as a varying. See section 12.5 "Coordinate
  * Transformation" of the ES 3.2 full specification for details.
  *
- * This transformation
- * occurs early on, as NIR and prior to optimisation, in order to take
- * advantage of NIR optimisation passes of the transform itself. */
+ * This transformation occurs early on, as NIR and prior to optimisation, in
+ * order to take advantage of NIR optimisation passes of the transform itself.
+ * */
 
 static void
 write_transformed_position(nir_builder *b, nir_ssa_def *input_point)
 {
 	/* XXX: From uniforms? */
+
 	nir_ssa_def *viewport_width = nir_imm_float(b, 400.0);
 	nir_ssa_def *viewport_height = nir_imm_float(b, 240.0);
 	nir_ssa_def *viewport_center_x = nir_imm_float(b, 400.0 / 2.0f);
@@ -1377,15 +1376,12 @@ write_transformed_position(nir_builder *b, nir_ssa_def *input_point)
 	nir_ssa_def *depth_near = nir_imm_float(b, 0.0);
 	nir_ssa_def *depth_far = nir_imm_float(b, 1.0);
 
-	/* TODO: Don't assume 400x240 screen, nor 0.5, nor NDC input */
-#if 0
-	nir_ssa_def *window = nir_vec4(b, nir_imm_float(b, 200.0f), nir_imm_float(b, 120.0f), nir_imm_float(b, 0.5f), nir_imm_float(b, 0.0));
-	nir_ssa_def *persp = nir_vec4(b, nir_imm_float(b, 0), nir_imm_float(b, 0), nir_imm_float(b, 0), nir_imm_float(b, 1.0));
-	nir_ssa_def *transformed_point = nir_fadd(b, nir_fadd(b, nir_fmul(b, input_point, window), window), persp);
-#endif
+	/* World space to normalised device coordinates */
 
-	/* XXX */
-	nir_ssa_def *ndc_point = input_point;
+	nir_ssa_def *w_recip = nir_frcp(b, nir_channel(b, input_point, 3));
+	nir_ssa_def *ndc_point = nir_fmul(b, input_point, w_recip);
+
+	/* Normalised device coordinates to screen space */
 
 	nir_ssa_def *viewport_multiplier = nir_vec4(b,
 			nir_fmul(b, viewport_width, nir_imm_float(b, 0.5f)),
