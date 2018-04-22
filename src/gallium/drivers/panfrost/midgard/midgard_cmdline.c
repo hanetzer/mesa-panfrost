@@ -670,7 +670,8 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				/* TODO: half-floats */
 				/* TODO: Spill to ld_uniform */
 
-				int reg_slot = ctx->uniform_base + offset;
+				//int reg_slot = ctx->uniform_base + offset;
+				int reg_slot = 23 - offset;
 				
 				/* Uniform accesses are 0-cycle, since they're
 				 * just a register fetch in the usual case. So,
@@ -1002,6 +1003,8 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					emit_binary_vector_instruction(ains, register_words,
 							&register_words_count, body_words,
 							body_size, &body_words_count, &bytes_emitted);
+					++index;
+					break;
 				} else if (ains->compact_branch) {
 					/* XXX: Workaround hardware errata where branches cannot standalone in a word by including a dummy move */
 					if (index == 0) {
