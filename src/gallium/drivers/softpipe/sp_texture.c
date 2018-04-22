@@ -205,6 +205,7 @@ softpipe_resource_destroy(struct pipe_screen *pscreen,
    struct softpipe_screen *screen = softpipe_screen(pscreen);
    struct softpipe_resource *spr = softpipe_resource(pt);
 
+#if 0
    if (spr->dt) {
       /* display target */
       struct sw_winsys *winsys = screen->winsys;
@@ -214,6 +215,8 @@ softpipe_resource_destroy(struct pipe_screen *pscreen,
       /* regular texture */
       align_free(spr->data);
    }
+#endif
+   printf("Resource destroy...\n");
 
    FREE(spr);
 }
