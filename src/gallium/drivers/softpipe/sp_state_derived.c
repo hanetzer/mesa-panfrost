@@ -36,7 +36,6 @@
 #include "sp_screen.h"
 #include "sp_state.h"
 #include "sp_texture.h"
-#include "sp_tex_sample.h"
 #include "sp_tex_tile_cache.h"
 
 
@@ -285,11 +284,6 @@ set_shader_sampler(struct softpipe_context *softpipe,
                    enum pipe_shader_type shader,
                    int max_sampler)
 {
-   int i;
-   for (i = 0; i <= max_sampler; i++) {
-      softpipe->tgsi.sampler[shader]->sp_sampler[i] =
-         (struct sp_sampler *)(softpipe->samplers[shader][i]);
-   }
 }
 
 void

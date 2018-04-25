@@ -50,7 +50,6 @@
 #include "sp_texture.h"
 #include "sp_query.h"
 #include "sp_screen.h"
-#include "sp_tex_sample.h"
 #include "sp_image.h"
 
 static void
@@ -174,7 +173,6 @@ softpipe_create_context(struct pipe_screen *screen,
    softpipe_init_clip_funcs(&softpipe->pipe);
    softpipe_init_query_funcs( softpipe );
    softpipe_init_rasterizer_funcs(&softpipe->pipe);
-   softpipe_init_sampler_funcs(&softpipe->pipe);
    softpipe_init_shader_funcs(&softpipe->pipe);
    softpipe_init_streamout_funcs(&softpipe->pipe);
    softpipe_init_texture_funcs( &softpipe->pipe );
@@ -184,8 +182,6 @@ softpipe_create_context(struct pipe_screen *screen,
    softpipe->pipe.set_framebuffer_state = softpipe_set_framebuffer_state;
 
    softpipe->pipe.draw_vbo = softpipe_draw_vbo;
-
-   softpipe->pipe.launch_grid = softpipe_launch_grid;
 
    softpipe->pipe.clear = softpipe_clear;
    softpipe->pipe.flush = softpipe_flush_wrapped;
@@ -197,11 +193,6 @@ softpipe_create_context(struct pipe_screen *screen,
    if (!softpipe->pipe.stream_uploader)
       goto fail;
    softpipe->pipe.const_uploader = softpipe->pipe.stream_uploader;
-
-   softpipe->blitter = util_blitter_create(&softpipe->pipe);
-   if (!softpipe->blitter) {
-      goto fail;
-   }
 
    sp_init_surface_functions(softpipe);
 

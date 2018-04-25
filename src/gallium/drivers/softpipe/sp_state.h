@@ -221,9 +221,5 @@ softpipe_cleanup_geometry_sampling(struct softpipe_context *ctx);
 
 
 void
-softpipe_launch_grid(struct pipe_context *context,
-                     const struct pipe_grid_info *info);
-
-void
 softpipe_update_compute_samplers(struct softpipe_context *softpipe);
 #endif
