@@ -38,7 +38,6 @@
 #include "util/u_pstipple.h"
 #include "util/u_inlines.h"
 #include "util/u_upload_mgr.h"
-#include "sp_buffer.h"
 #include "sp_clear.h"
 #include "sp_context.h"
 #include "sp_flush.h"

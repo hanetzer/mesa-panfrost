@@ -19,8 +19,6 @@
 # SOFTWARE.
 
 files_softpipe = files(
-  'sp_buffer.c',
-  'sp_buffer.h',
   'sp_clear.c',
   'sp_clear.h',
   'sp_context.c',

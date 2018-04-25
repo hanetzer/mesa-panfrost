@@ -72,6 +72,7 @@ softpipe_set_framebuffer_state(struct pipe_context *pipe,
 	 struct sw_winsys *winsys = scr->winsys;
 	 struct pipe_surface *surf = sp->framebuffer.cbufs[i];
 
+	 printf("Map...\n");
 	 uint8_t *map = winsys->displaytarget_map(winsys, ((struct softpipe_resource*) surf->texture)->dt, PIPE_TRANSFER_WRITE);
 	 trans_setup_framebuffer(sp->panfrost, map, fb->width, fb->height);
       }
