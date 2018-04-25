@@ -227,7 +227,7 @@ softpipe_get_param(struct pipe_screen *screen, enum pipe_cap param)
    case PIPE_CAP_DEVICE_ID:
       return 0xFFFFFFFF;
    case PIPE_CAP_ACCELERATED:
-      return 0;
+      return 1;
    case PIPE_CAP_VIDEO_MEMORY: {
       /* XXX: Do we want to return the full amount fo system memory ? */
       uint64_t system_memory;
