@@ -33,8 +33,6 @@
 #include "util/u_inlines.h"
 #include "util/u_format.h"
 
-#include "draw/draw_context.h"
-
 #include "sp_context.h"
 #include "sp_state.h"
 #include "sp_texture.h"
@@ -60,8 +58,6 @@ softpipe_bind_sampler_states(struct pipe_context *pipe,
    assert(shader < PIPE_SHADER_TYPES);
    assert(start + num <= ARRAY_SIZE(softpipe->samplers[shader]));
 
-   draw_flush(softpipe->draw);
-
    /* set the new samplers */
    for (i = 0; i < num; i++) {
       softpipe->samplers[shader][start + i] = samplers[i];
@@ -73,13 +69,6 @@ softpipe_bind_sampler_states(struct pipe_context *pipe,
       while (j > 0 && softpipe->samplers[shader][j - 1] == NULL)
          j--;
       softpipe->num_samplers[shader] = j;
-   }
-
-   if (shader == PIPE_SHADER_VERTEX || shader == PIPE_SHADER_GEOMETRY) {
-      draw_set_samplers(softpipe->draw,
-                        shader,
-                        softpipe->samplers[shader],
-                        softpipe->num_samplers[shader]);
    }
 
    softpipe->dirty |= SP_NEW_SAMPLER;
@@ -107,8 +96,6 @@ softpipe_set_sampler_views(struct pipe_context *pipe,
 
    assert(shader < PIPE_SHADER_TYPES);
    assert(start + num <= ARRAY_SIZE(softpipe->sampler_views[shader]));
-
-   draw_flush(softpipe->draw);
 
    /* set the new sampler views */
    for (i = 0; i < num; i++) {
@@ -141,13 +128,6 @@ softpipe_set_sampler_views(struct pipe_context *pipe,
       while (j > 0 && softpipe->sampler_views[shader][j - 1] == NULL)
          j--;
       softpipe->num_sampler_views[shader] = j;
-   }
-
-   if (shader == PIPE_SHADER_VERTEX || shader == PIPE_SHADER_GEOMETRY) {
-      draw_set_sampler_views(softpipe->draw,
-                             shader,
-                             softpipe->sampler_views[shader],
-                             softpipe->num_sampler_views[shader]);
    }
 
    softpipe->dirty |= SP_NEW_TEXTURE;
@@ -259,13 +239,6 @@ prepare_shader_sampling(
             mip_offsets[0] = 0;
             assert(addr);
          }
-         draw_set_mapped_texture(sp->draw,
-                                 shader_type,
-                                 i,
-                                 width0, tex->height0, num_layers,
-                                 first_level, last_level,
-                                 addr,
-                                 row_stride, img_stride, mip_offsets);
       }
    }
 }

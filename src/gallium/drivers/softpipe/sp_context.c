@@ -38,7 +38,6 @@
 #include "util/u_pstipple.h"
 #include "util/u_inlines.h"
 #include "util/u_upload_mgr.h"
-#include "tgsi/tgsi_exec.h"
 #include "sp_buffer.h"
 #include "sp_clear.h"
 #include "sp_context.h"
@@ -60,14 +59,6 @@ softpipe_destroy( struct pipe_context *pipe )
    struct softpipe_context *softpipe = softpipe_context( pipe );
    uint i, sh;
 
-#if DO_PSTIPPLE_IN_HELPER_MODULE
-   if (softpipe->pstipple.sampler)
-      pipe->delete_sampler_state(pipe, softpipe->pstipple.sampler);
-
-   pipe_resource_reference(&softpipe->pstipple.texture, NULL);
-   pipe_sampler_view_reference(&softpipe->pstipple.sampler_view, NULL);
-#endif
-
    if (softpipe->blitter) {
       util_blitter_destroy(softpipe->blitter);
    }
@@ -75,35 +66,14 @@ softpipe_destroy( struct pipe_context *pipe )
    if (softpipe->draw)
       draw_destroy( softpipe->draw );
 
-   if (softpipe->quad.shade)
-      softpipe->quad.shade->destroy( softpipe->quad.shade );
-
-   if (softpipe->quad.depth_test)
-      softpipe->quad.depth_test->destroy( softpipe->quad.depth_test );
-
-   if (softpipe->quad.blend)
-      softpipe->quad.blend->destroy( softpipe->quad.blend );
-
-   if (softpipe->quad.pstipple)
-      softpipe->quad.pstipple->destroy( softpipe->quad.pstipple );
-
    if (softpipe->pipe.stream_uploader)
       u_upload_destroy(softpipe->pipe.stream_uploader);
 
    for (i = 0; i < PIPE_MAX_COLOR_BUFS; i++) {
-      sp_destroy_tile_cache(softpipe->cbuf_cache[i]);
       pipe_surface_reference(&softpipe->framebuffer.cbufs[i], NULL);
    }
 
-   sp_destroy_tile_cache(softpipe->zsbuf_cache);
    pipe_surface_reference(&softpipe->framebuffer.zsbuf, NULL);
-
-   for (sh = 0; sh < ARRAY_SIZE(softpipe->tex_cache); sh++) {
-      for (i = 0; i < ARRAY_SIZE(softpipe->tex_cache[0]); i++) {
-         sp_destroy_tex_tile_cache(softpipe->tex_cache[sh][i]);
-         pipe_sampler_view_reference(&softpipe->sampler_views[sh][i], NULL);
-      }
-   }
 
    for (sh = 0; sh < ARRAY_SIZE(softpipe->constants); sh++) {
       for (i = 0; i < ARRAY_SIZE(softpipe->constants[0]); i++) {
@@ -117,17 +87,8 @@ softpipe_destroy( struct pipe_context *pipe )
       pipe_vertex_buffer_unreference(&softpipe->vertex_buffer[i]);
    }
 
-   tgsi_exec_machine_destroy(softpipe->fs_machine);
-
-   for (i = 0; i < PIPE_SHADER_TYPES; i++) {
-      FREE(softpipe->tgsi.sampler[i]);
-      FREE(softpipe->tgsi.image[i]);
-      FREE(softpipe->tgsi.buffer[i]);
-   }
-
    FREE( softpipe );
 }
-
 
 /**
  * if (the texture is being used as a framebuffer surface)
@@ -204,22 +165,6 @@ softpipe_create_context(struct pipe_screen *screen,
 
    util_init_math();
 
-   for (i = 0; i < PIPE_SHADER_TYPES; i++) {
-      softpipe->tgsi.sampler[i] = sp_create_tgsi_sampler();
-   }
-
-   for (i = 0; i < PIPE_SHADER_TYPES; i++) {
-      softpipe->tgsi.image[i] = sp_create_tgsi_image();
-   }
-
-   for (i = 0; i < PIPE_SHADER_TYPES; i++) {
-      softpipe->tgsi.buffer[i] = sp_create_tgsi_buffer();
-   }
-
-   softpipe->dump_fs = debug_get_bool_option( "SOFTPIPE_DUMP_FS", FALSE );
-   softpipe->dump_gs = debug_get_bool_option( "SOFTPIPE_DUMP_GS", FALSE );
-   softpipe->dump_cs = debug_get_bool_option( "SOFTPIPE_DUMP_CS", FALSE );
-
    softpipe->pipe.screen = screen;
    softpipe->pipe.destroy = softpipe_destroy;
    softpipe->pipe.priv = priv;
@@ -248,115 +193,17 @@ softpipe_create_context(struct pipe_screen *screen,
    softpipe->pipe.memory_barrier = softpipe_memory_barrier;
    softpipe->pipe.render_condition = softpipe_render_condition;
    
-   /*
-    * Alloc caches for accessing drawing surfaces and textures.
-    * Must be before quad stage setup!
-    */
-   for (i = 0; i < PIPE_MAX_COLOR_BUFS; i++)
-      softpipe->cbuf_cache[i] = sp_create_tile_cache( &softpipe->pipe );
-   softpipe->zsbuf_cache = sp_create_tile_cache( &softpipe->pipe );
-
-   /* Allocate texture caches */
-   for (sh = 0; sh < ARRAY_SIZE(softpipe->tex_cache); sh++) {
-      for (i = 0; i < ARRAY_SIZE(softpipe->tex_cache[0]); i++) {
-         softpipe->tex_cache[sh][i] = sp_create_tex_tile_cache(&softpipe->pipe);
-         if (!softpipe->tex_cache[sh][i])
-            goto fail;
-      }
-   }
-
-   softpipe->fs_machine = tgsi_exec_machine_create(PIPE_SHADER_FRAGMENT);
-
-   /* setup quad rendering stages */
-   softpipe->quad.shade = sp_quad_shade_stage(softpipe);
-   softpipe->quad.depth_test = sp_quad_depth_test_stage(softpipe);
-   softpipe->quad.blend = sp_quad_blend_stage(softpipe);
-   softpipe->quad.pstipple = sp_quad_polygon_stipple_stage(softpipe);
-
    softpipe->pipe.stream_uploader = u_upload_create_default(&softpipe->pipe);
    if (!softpipe->pipe.stream_uploader)
       goto fail;
    softpipe->pipe.const_uploader = softpipe->pipe.stream_uploader;
-
-   /*
-    * Create drawing context and plug our rendering stage into it.
-    */
-   if (sp_screen->use_llvm)
-      softpipe->draw = draw_create(&softpipe->pipe);
-   else
-      softpipe->draw = draw_create_no_llvm(&softpipe->pipe);
-   if (!softpipe->draw) 
-      goto fail;
-
-   draw_texture_sampler(softpipe->draw,
-                        PIPE_SHADER_VERTEX,
-                        (struct tgsi_sampler *)
-                           softpipe->tgsi.sampler[PIPE_SHADER_VERTEX]);
-
-   draw_texture_sampler(softpipe->draw,
-                        PIPE_SHADER_GEOMETRY,
-                        (struct tgsi_sampler *)
-                           softpipe->tgsi.sampler[PIPE_SHADER_GEOMETRY]);
-
-   draw_image(softpipe->draw,
-              PIPE_SHADER_VERTEX,
-              (struct tgsi_image *)
-              softpipe->tgsi.image[PIPE_SHADER_VERTEX]);
-
-   draw_image(softpipe->draw,
-              PIPE_SHADER_GEOMETRY,
-              (struct tgsi_image *)
-              softpipe->tgsi.image[PIPE_SHADER_GEOMETRY]);
-
-   draw_buffer(softpipe->draw,
-              PIPE_SHADER_VERTEX,
-              (struct tgsi_buffer *)
-              softpipe->tgsi.buffer[PIPE_SHADER_VERTEX]);
-
-   draw_buffer(softpipe->draw,
-              PIPE_SHADER_GEOMETRY,
-              (struct tgsi_buffer *)
-              softpipe->tgsi.buffer[PIPE_SHADER_GEOMETRY]);
-
-   if (debug_get_bool_option( "SOFTPIPE_NO_RAST", FALSE ))
-      softpipe->no_rast = TRUE;
-
-   softpipe->vbuf_backend = sp_create_vbuf_backend(softpipe);
-   if (!softpipe->vbuf_backend)
-      goto fail;
-
-   softpipe->vbuf = draw_vbuf_stage(softpipe->draw, softpipe->vbuf_backend);
-   if (!softpipe->vbuf)
-      goto fail;
-
-   draw_set_rasterize_stage(softpipe->draw, softpipe->vbuf);
-   draw_set_render(softpipe->draw, softpipe->vbuf_backend);
 
    softpipe->blitter = util_blitter_create(&softpipe->pipe);
    if (!softpipe->blitter) {
       goto fail;
    }
 
-   /* must be done before installing Draw stages */
-   util_blitter_cache_all_shaders(softpipe->blitter);
-
-   /* plug in AA line/point stages */
-   draw_install_aaline_stage(softpipe->draw, &softpipe->pipe);
-   draw_install_aapoint_stage(softpipe->draw, &softpipe->pipe);
-
-   /* Do polygon stipple w/ texture map + frag prog? */
-#if DO_PSTIPPLE_IN_DRAW_MODULE
-   draw_install_pstipple_stage(softpipe->draw, &softpipe->pipe);
-#endif
-
-   draw_wide_point_sprites(softpipe->draw, TRUE);
-
    sp_init_surface_functions(softpipe);
-
-#if DO_PSTIPPLE_IN_HELPER_MODULE
-   /* create the polgon stipple sampler */
-   softpipe->pstipple.sampler = util_pstipple_create_sampler(&softpipe->pipe);
-#endif
 
    return &softpipe->pipe;
 

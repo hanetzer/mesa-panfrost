@@ -29,7 +29,6 @@
 #include "util/u_memory.h"
 #include "sp_context.h"
 #include "sp_state.h"
-#include "draw/draw_context.h"
 
 
 
@@ -46,18 +45,6 @@ softpipe_bind_rasterizer_state(struct pipe_context *pipe,
                                void *rasterizer)
 {
 	softpipe_context(pipe)->panfrost->bind_rasterizer_state(softpipe_context(pipe)->panfrost, rasterizer);
-
-   struct softpipe_context *softpipe = softpipe_context(pipe);
-
-   if (softpipe->rasterizer == rasterizer)
-      return;
-
-   /* pass-through to draw module */
-   draw_set_rasterizer_state(softpipe->draw, rasterizer, rasterizer);
-
-   softpipe->rasterizer = rasterizer;
-
-   softpipe->dirty |= SP_NEW_RASTERIZER;
 }
 
 
@@ -67,7 +54,6 @@ softpipe_delete_rasterizer_state(struct pipe_context *pipe,
 {
 	softpipe_context(pipe)->panfrost->delete_rasterizer_state(softpipe_context(pipe)->panfrost, rasterizer);
 }
-
 
 void
 softpipe_init_rasterizer_funcs(struct pipe_context *pipe)

@@ -43,8 +43,6 @@
 #include "sp_texture.h"
 #include "sp_screen.h"
 
-#include "draw/draw_context.h"
-
 void
 softpipe_draw_vbo(struct pipe_context *pipe,
                   const struct pipe_draw_info *info)

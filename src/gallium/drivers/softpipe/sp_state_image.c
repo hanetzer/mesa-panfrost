@@ -37,19 +37,6 @@ static void softpipe_set_shader_images(struct pipe_context *pipe,
    assert(shader < PIPE_SHADER_TYPES);
    assert(start + num <= ARRAY_SIZE(softpipe->sampler_views[shader]));
 
-   /* set the new images */
-   for (i = 0; i < num; i++) {
-      int idx = start + i;
-
-      if (images) {
-         pipe_resource_reference(&softpipe->tgsi.image[shader]->sp_iview[idx].resource, images[i].resource);
-         softpipe->tgsi.image[shader]->sp_iview[idx] = images[i];
-      }
-      else {
-         pipe_resource_reference(&softpipe->tgsi.image[shader]->sp_iview[idx].resource, NULL);
-         memset(&softpipe->tgsi.image[shader]->sp_iview[idx], 0, sizeof(struct pipe_image_view));
-      }
-   }
 }
 
 static void softpipe_set_shader_buffers(struct pipe_context *pipe,
@@ -62,20 +49,6 @@ static void softpipe_set_shader_buffers(struct pipe_context *pipe,
    unsigned i;
    assert(shader < PIPE_SHADER_TYPES);
    assert(start + num <= ARRAY_SIZE(softpipe->buffers[shader]));
-
-   /* set the new images */
-   for (i = 0; i < num; i++) {
-      int idx = start + i;
-
-      if (buffers) {
-         pipe_resource_reference(&softpipe->tgsi.buffer[shader]->sp_bview[idx].buffer, buffers[i].buffer);
-         softpipe->tgsi.buffer[shader]->sp_bview[idx] = buffers[i];
-      }
-      else {
-         pipe_resource_reference(&softpipe->tgsi.buffer[shader]->sp_bview[idx].buffer, NULL);
-         memset(&softpipe->tgsi.buffer[shader]->sp_bview[idx], 0, sizeof(struct pipe_shader_buffer));
-      }
-   }
 }
 
 void softpipe_init_image_funcs(struct pipe_context *pipe)

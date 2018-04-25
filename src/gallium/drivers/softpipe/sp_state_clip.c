@@ -29,7 +29,6 @@
  */
 #include "sp_context.h"
 #include "sp_state.h"
-#include "draw/draw_context.h"
 
 
 static void
@@ -39,7 +38,6 @@ softpipe_set_clip_state(struct pipe_context *pipe,
    struct softpipe_context *softpipe = softpipe_context(pipe);
 
    /* pass the clip state to the draw module */
-   draw_set_clip_state(softpipe->draw, clip);
 }
 
 
@@ -52,8 +50,6 @@ softpipe_set_viewport_states(struct pipe_context *pipe,
    struct softpipe_context *softpipe = softpipe_context(pipe);
 
    /* pass the viewport info to the draw module */
-   draw_set_viewport_states(softpipe->draw, start_slot, num_viewports,
-                            viewports);
 
    memcpy(softpipe->viewports + start_slot, viewports,
           sizeof(struct pipe_viewport_state) * num_viewports);
@@ -69,8 +65,6 @@ softpipe_set_scissor_states(struct pipe_context *pipe,
 {
    struct softpipe_context *softpipe = softpipe_context(pipe);
 
-   draw_flush(softpipe->draw);
-
    debug_assert(start_slot < PIPE_MAX_VIEWPORTS);
    debug_assert((start_slot + num_scissors) <= PIPE_MAX_VIEWPORTS);
 
@@ -85,8 +79,6 @@ softpipe_set_polygon_stipple(struct pipe_context *pipe,
                              const struct pipe_poly_stipple *stipple)
 {
    struct softpipe_context *softpipe = softpipe_context(pipe);
-
-   draw_flush(softpipe->draw);
 
    softpipe->poly_stipple = *stipple; /* struct copy */
    softpipe->dirty |= SP_NEW_STIPPLE;
