@@ -135,6 +135,7 @@ softpipe_displaytarget_layout(struct pipe_screen *screen,
 
    /* Round up the surface size to a multiple of the tile size?
     */
+   printf("Surface created\n");
    spr->dt = winsys->displaytarget_create(winsys,
                                           spr->base.bind,
                                           spr->base.format,
@@ -158,7 +159,10 @@ softpipe_resource_create_front(struct pipe_screen *screen,
                                const struct pipe_resource *templat,
                                const void *map_front_private)
 {
-	return panfrost_resource_create_front(screen, templat, map_front_private);
+	if (!(templat->bind & PIPE_BIND_DISPLAY_TARGET))
+		return panfrost_resource_create_front(screen, templat, map_front_private);
+
+	printf("Disp\n");
    struct softpipe_resource *spr = CALLOC_STRUCT(softpipe_resource);
    if (!spr)
       return NULL;
@@ -241,6 +245,7 @@ softpipe_resource_from_handle(struct pipe_screen *screen,
                util_is_power_of_two(templat->height0) &&
                util_is_power_of_two(templat->depth0));
 
+   printf("Create from handle\n");
    spr->dt = winsys->displaytarget_from_handle(winsys,
                                                templat,
                                                whandle,
