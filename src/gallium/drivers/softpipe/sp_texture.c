@@ -347,10 +347,9 @@ softpipe_surface_destroy(struct pipe_context *pipe,
     * needed post-processing to put them into hardware layout, this is
     * where it would happen.  For softpipe, nothing to do.
     */
-   //assert(surf->texture);
-   //pipe_resource_reference(&surf->texture, NULL);
+   assert(surf->texture);
+   pipe_resource_reference(&surf->texture, NULL);
    FREE(surf);
-   printf("XXX destroy surface\n");
 }
 
 

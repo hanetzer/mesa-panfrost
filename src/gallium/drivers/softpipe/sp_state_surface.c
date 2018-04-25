@@ -40,6 +40,8 @@
 #include "util/u_format.h"
 #include "util/u_inlines.h"
 
+/* XXX: Header */
+void trans_setup_framebuffer(void *, void *, int, int);
 
 /**
  * XXX this might get moved someday
@@ -72,16 +74,7 @@ softpipe_set_framebuffer_state(struct pipe_context *pipe,
 	 struct pipe_surface *surf = sp->framebuffer.cbufs[i];
 
 	 uint8_t *map = winsys->displaytarget_map(winsys, ((struct softpipe_resource*) surf->texture)->dt, PIPE_TRANSFER_WRITE);
-	 printf("Map! %p\n", map);
-	 for (int j = 0; j < (768/2); ++j) {
-		 for (int i = 0; i < 1366; ++i) {
-			 map[((i + (1366*j))*4)] = 0xFF;
-			 map[((i + (1366*j))*4)+1] = 0x00;
-			 map[((i + (1366*j))*4)+2] = 0x00;
-			 map[((i + (1366*j))*4)+3] = 0xFF;
-		 }
-	 }
-
+	 trans_setup_framebuffer(sp->panfrost, map, fb->width, fb->height);
       }
    }
 

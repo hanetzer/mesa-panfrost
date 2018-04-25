@@ -492,7 +492,6 @@ softpipe_flush_frontbuffer(struct pipe_screen *_screen,
    struct softpipe_resource *texture = softpipe_resource(resource);
 
    assert(texture->dt);
-   memset(winsys->displaytarget_map(winsys, texture->dt, 0), 0xFF0000FF, 4096);
    if (texture->dt)
       winsys->displaytarget_display(winsys, texture->dt, context_private, sub_box);
 }
