@@ -38,7 +38,6 @@
 #include "sp_clear.h"
 #include "sp_context.h"
 #include "sp_query.h"
-#include "sp_tile_cache.h"
 
 
 /**

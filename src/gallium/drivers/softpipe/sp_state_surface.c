@@ -30,7 +30,6 @@
 
 #include "sp_context.h"
 #include "sp_state.h"
-#include "sp_tile_cache.h"
 #include "sp_screen.h"
 #include "sp_texture.h"
 #include "state_tracker/sw_winsys.h"

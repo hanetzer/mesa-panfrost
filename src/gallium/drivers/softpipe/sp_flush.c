@@ -36,8 +36,6 @@
 #include "sp_flush.h"
 #include "sp_context.h"
 #include "sp_state.h"
-#include "sp_tile_cache.h"
-#include "sp_tex_tile_cache.h"
 #include "util/u_debug_image.h"
 #include "util/u_memory.h"
 #include "util/u_string.h"
@@ -133,21 +131,6 @@ softpipe_flush_resource(struct pipe_context *pipe,
 void softpipe_texture_barrier(struct pipe_context *pipe, unsigned flags)
 {
    struct softpipe_context *softpipe = softpipe_context(pipe);
-   uint i, sh;
-
-   for (sh = 0; sh < ARRAY_SIZE(softpipe->tex_cache); sh++) {
-      for (i = 0; i < softpipe->num_sampler_views[sh]; i++) {
-         sp_flush_tex_tile_cache(softpipe->tex_cache[sh][i]);
-      }
-   }
-
-   for (i = 0; i < softpipe->framebuffer.nr_cbufs; i++)
-      if (softpipe->cbuf_cache[i])
-         sp_flush_tile_cache(softpipe->cbuf_cache[i]);
-
-   if (softpipe->zsbuf_cache)
-      sp_flush_tile_cache(softpipe->zsbuf_cache);
-
    softpipe->dirty_render_cache = FALSE;
 }
 

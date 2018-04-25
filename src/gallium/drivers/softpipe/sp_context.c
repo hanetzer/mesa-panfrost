@@ -45,8 +45,6 @@
 #include "sp_prim_vbuf.h"
 #include "sp_state.h"
 #include "sp_surface.h"
-#include "sp_tile_cache.h"
-#include "sp_tex_tile_cache.h"
 #include "sp_texture.h"
 #include "sp_query.h"
 #include "sp_screen.h"
@@ -122,15 +120,6 @@ softpipe_is_resource_referenced( struct pipe_context *pipe,
       }
    }
    
-   /* check if any of the tex_cache textures are this texture */
-   for (sh = 0; sh < ARRAY_SIZE(softpipe->tex_cache); sh++) {
-      for (i = 0; i < ARRAY_SIZE(softpipe->tex_cache[0]); i++) {
-         if (softpipe->tex_cache[sh][i] &&
-             softpipe->tex_cache[sh][i]->texture == texture)
-            return SP_REFERENCED_FOR_READ;
-      }
-   }
-
    return SP_UNREFERENCED;
 }
 

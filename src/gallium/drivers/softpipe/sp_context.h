@@ -50,8 +50,6 @@
 struct softpipe_vbuf_render;
 struct draw_context;
 struct draw_stage;
-struct softpipe_tile_cache;
-struct softpipe_tex_tile_cache;
 struct sp_fragment_shader;
 struct sp_vertex_shader;
 struct sp_velems_state;
@@ -193,19 +191,7 @@ struct softpipe_context {
 
    boolean dirty_render_cache;
 
-   struct softpipe_tile_cache *cbuf_cache[PIPE_MAX_COLOR_BUFS];
-   struct softpipe_tile_cache *zsbuf_cache;
-
    unsigned tex_timestamp;
-
-   /*
-    * Texture caches for vertex, fragment, geometry stages.
-    * Don't use PIPE_SHADER_TYPES here to avoid allocating unused memory
-    * for compute shaders.
-    * XXX wouldn't it make more sense for the tile cache to just be part
-    * of sp_sampler_view?
-    */
-   struct softpipe_tex_tile_cache *tex_cache[PIPE_SHADER_TYPES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
 
    unsigned dump_fs : 1;
    unsigned dump_gs : 1;

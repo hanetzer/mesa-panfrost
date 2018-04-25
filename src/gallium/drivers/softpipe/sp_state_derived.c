@@ -36,7 +36,6 @@
 #include "sp_screen.h"
 #include "sp_state.h"
 #include "sp_texture.h"
-#include "sp_tex_tile_cache.h"
 
 
 /**
@@ -292,38 +291,6 @@ softpipe_update_compute_samplers(struct softpipe_context *softpipe)
    set_shader_sampler(softpipe, PIPE_SHADER_COMPUTE, softpipe->cs->max_sampler);
 }
 
-static void
-update_tgsi_samplers( struct softpipe_context *softpipe )
-{
-   unsigned i, sh;
-
-   set_shader_sampler(softpipe, PIPE_SHADER_VERTEX,
-                      softpipe->vs->max_sampler);
-   set_shader_sampler(softpipe, PIPE_SHADER_FRAGMENT,
-                      softpipe->fs_variant->info.file_max[TGSI_FILE_SAMPLER]);
-   if (softpipe->gs) {
-      set_shader_sampler(softpipe, PIPE_SHADER_GEOMETRY,
-                         softpipe->gs->max_sampler);
-   }
-
-   /* XXX is this really necessary here??? */
-   for (sh = 0; sh < ARRAY_SIZE(softpipe->tex_cache); sh++) {
-      for (i = 0; i < PIPE_MAX_SAMPLERS; i++) {
-         struct softpipe_tex_tile_cache *tc = softpipe->tex_cache[sh][i];
-         if (tc && tc->texture) {
-            struct softpipe_resource *spt = softpipe_resource(tc->texture);
-            if (spt->timestamp != tc->timestamp) {
-               sp_tex_tile_cache_validate_texture( tc );
-               /*
-                 _debug_printf("INV %d %d\n", tc->timestamp, spt->timestamp);
-               */
-               tc->timestamp = spt->timestamp;
-            }
-         }
-      }
-   }
-}
-
 
 static void
 update_fragment_shader(struct softpipe_context *softpipe, unsigned prim)
@@ -452,13 +419,6 @@ softpipe_update_derived(struct softpipe_context *softpipe, unsigned prim)
                           SP_NEW_FS))
       update_polygon_stipple_enable(softpipe, prim);
 #endif
-
-   /* TODO: this looks suboptimal */
-   if (softpipe->dirty & (SP_NEW_SAMPLER |
-                          SP_NEW_TEXTURE |
-                          SP_NEW_FS | 
-                          SP_NEW_VS))
-      update_tgsi_samplers( softpipe );
 
    if (softpipe->dirty & (SP_NEW_RASTERIZER |
                           SP_NEW_FS |
