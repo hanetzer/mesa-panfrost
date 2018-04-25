@@ -52,48 +52,6 @@ create_fs_variant(struct softpipe_context *softpipe,
 {
    struct sp_fragment_shader_variant *var;
    struct pipe_shader_state *curfs = &fs->shader;
-
-   /* codegen, create variant object */
-   var = softpipe_create_fs_variant_exec(softpipe);
-
-   if (var) {
-      var->key = *key;
-
-#if DO_PSTIPPLE_IN_HELPER_MODULE
-      if (key->polygon_stipple) {
-         /* get new shader that implements polygon stippling */
-         var->tokens = 
-            util_pstipple_create_fragment_shader(curfs->tokens,
-                                                 &var->stipple_sampler_unit, 0,
-                                                 TGSI_FILE_INPUT);
-      }
-      else
-#endif
-      {
-         var->tokens = tgsi_dup_tokens(curfs->tokens);
-         var->stipple_sampler_unit = 0;
-      }
-
-      tgsi_scan_shader(var->tokens, &var->info);
-
-      /* See comments elsewhere about draw fragment shaders */
-#if 0
-      /* draw's fs state */
-      var->draw_shader = draw_create_fragment_shader(softpipe->draw,
-                                                     &fs->shader);
-      if (!var->draw_shader) {
-         var->delete(var);
-         FREE((void *) var->tokens);
-         return NULL;
-      }
-#endif
-
-      /* insert variant into linked list */
-      var->next = fs->variants;
-      fs->variants = var;
-   }
-
-   return var;
 }
 
 

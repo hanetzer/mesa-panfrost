@@ -42,13 +42,11 @@
 #include "sp_clear.h"
 #include "sp_context.h"
 #include "sp_flush.h"
-#include "sp_prim_vbuf.h"
 #include "sp_state.h"
 #include "sp_surface.h"
 #include "sp_texture.h"
 #include "sp_query.h"
 #include "sp_screen.h"
-#include "sp_image.h"
 
 static void
 softpipe_destroy( struct pipe_context *pipe )
@@ -162,11 +160,10 @@ softpipe_create_context(struct pipe_screen *screen,
    softpipe_init_clip_funcs(&softpipe->pipe);
    softpipe_init_query_funcs( softpipe );
    softpipe_init_rasterizer_funcs(&softpipe->pipe);
-   softpipe_init_shader_funcs(&softpipe->pipe);
    softpipe_init_streamout_funcs(&softpipe->pipe);
    softpipe_init_texture_funcs( &softpipe->pipe );
    softpipe_init_vertex_funcs(&softpipe->pipe);
-   softpipe_init_image_funcs(&softpipe->pipe);
+   softpipe_init_shader_funcs(&softpipe->pipe);
 
    softpipe->pipe.set_framebuffer_state = softpipe_set_framebuffer_state;
 

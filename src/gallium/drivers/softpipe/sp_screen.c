@@ -45,21 +45,23 @@
 #include "sp_fence.h"
 #include "sp_public.h"
 
-DEBUG_GET_ONCE_BOOL_OPTION(use_llvm, "SOFTPIPE_USE_LLVM", FALSE)
+static const char *
+softpipe_get_name(struct pipe_screen *screen)
+{
+   return "panfrost";
+}
 
 static const char *
 softpipe_get_vendor(struct pipe_screen *screen)
 {
-   return "VMware, Inc.";
+   return "panfrost";
 }
-
 
 static const char *
-softpipe_get_name(struct pipe_screen *screen)
+softpipe_get_device_vendor(struct pipe_screen *screen)
 {
-   return "softpipe";
+   return "ARM";
 }
-
 
 static int
 softpipe_get_param(struct pipe_screen *screen, enum pipe_cap param)
@@ -155,7 +157,7 @@ softpipe_get_param(struct pipe_screen *screen, enum pipe_cap param)
    case PIPE_CAP_TGSI_TEX_TXF_LZ:
       return 0;
    case PIPE_CAP_COMPUTE:
-      return 1;
+      return 0;
    case PIPE_CAP_USER_VERTEX_BUFFERS: /* XXX XXX */
    case PIPE_CAP_RESOURCE_FROM_USER_MEMORY:
       return 0;
@@ -502,59 +504,6 @@ softpipe_get_timestamp(struct pipe_screen *_screen)
    return os_time_get_nano();
 }
 
-static int
-softpipe_get_compute_param(struct pipe_screen *_screen,
-                           enum pipe_shader_ir ir_type,
-                           enum pipe_compute_cap param,
-                           void *ret)
-{
-   switch (param) {
-   case PIPE_COMPUTE_CAP_IR_TARGET:
-      return 0;
-   case PIPE_COMPUTE_CAP_MAX_GRID_SIZE:
-      if (ret) {
-         uint64_t *grid_size = ret;
-         grid_size[0] = 65535;
-         grid_size[1] = 65535;
-         grid_size[2] = 65535;
-      }
-      return 3 * sizeof(uint64_t) ;
-   case PIPE_COMPUTE_CAP_MAX_BLOCK_SIZE:
-      if (ret) {
-         uint64_t *block_size = ret;
-         block_size[0] = 1024;
-         block_size[1] = 1024;
-         block_size[2] = 1024;
-      }
-      return 3 * sizeof(uint64_t);
-   case PIPE_COMPUTE_CAP_MAX_THREADS_PER_BLOCK:
-      if (ret) {
-         uint64_t *max_threads_per_block = ret;
-         *max_threads_per_block = 1024;
-      }
-      return sizeof(uint64_t);
-   case PIPE_COMPUTE_CAP_MAX_LOCAL_SIZE:
-      if (ret) {
-         uint64_t *max_local_size = ret;
-         *max_local_size = 32768;
-      }
-      return sizeof(uint64_t);
-   case PIPE_COMPUTE_CAP_GRID_DIMENSION:
-   case PIPE_COMPUTE_CAP_MAX_GLOBAL_SIZE:
-   case PIPE_COMPUTE_CAP_MAX_PRIVATE_SIZE:
-   case PIPE_COMPUTE_CAP_MAX_INPUT_SIZE:
-   case PIPE_COMPUTE_CAP_MAX_MEM_ALLOC_SIZE:
-   case PIPE_COMPUTE_CAP_MAX_CLOCK_FREQUENCY:
-   case PIPE_COMPUTE_CAP_MAX_COMPUTE_UNITS:
-   case PIPE_COMPUTE_CAP_IMAGES_SUPPORTED:
-   case PIPE_COMPUTE_CAP_SUBGROUP_SIZE:
-   case PIPE_COMPUTE_CAP_ADDRESS_BITS:
-   case PIPE_COMPUTE_CAP_MAX_VARIABLE_THREADS_PER_BLOCK:
-      break;
-   }
-   return 0;
-}
-
 /**
  * Create a new pipe_screen object
  * Note: we're not presently subclassing pipe_screen (no softpipe_screen).
@@ -573,7 +522,7 @@ softpipe_create_screen(struct sw_winsys *winsys)
 
    screen->base.get_name = softpipe_get_name;
    screen->base.get_vendor = softpipe_get_vendor;
-   screen->base.get_device_vendor = softpipe_get_vendor; // TODO should be the CPU vendor
+   screen->base.get_device_vendor = softpipe_get_device_vendor; 
    screen->base.get_param = softpipe_get_param;
    screen->base.get_shader_param = softpipe_get_shader_param;
    screen->base.get_paramf = softpipe_get_paramf;
@@ -581,8 +530,6 @@ softpipe_create_screen(struct sw_winsys *winsys)
    screen->base.is_format_supported = softpipe_is_format_supported;
    screen->base.context_create = softpipe_create_context;
    screen->base.flush_frontbuffer = softpipe_flush_frontbuffer;
-   screen->base.get_compute_param = softpipe_get_compute_param;
-   screen->use_llvm = debug_get_option_use_llvm();
 
    softpipe_init_screen_texture_funcs(&screen->base);
    softpipe_init_screen_fence_funcs(&screen->base);
