@@ -31,6 +31,9 @@
 #include "sp_context.h"
 #include "sp_state.h"
 #include "sp_tile_cache.h"
+#include "sp_screen.h"
+#include "sp_texture.h"
+#include "state_tracker/sw_winsys.h"
 
 #include "draw/draw_context.h"
 
@@ -49,6 +52,40 @@ softpipe_set_framebuffer_state(struct pipe_context *pipe,
                                const struct pipe_framebuffer_state *fb)
 {
    struct softpipe_context *sp = softpipe_context(pipe);
+   int i;
+
+   for (i = 0; i < PIPE_MAX_COLOR_BUFS; i++) {
+      struct pipe_surface *cb = i < fb->nr_cbufs ? fb->cbufs[i] : NULL;
+
+      /* check if changing cbuf */
+      if (sp->framebuffer.cbufs[i] != cb) {
+	      if (i != 0) {
+		      printf("XXX: Multiple render targets not supported before t7xx!\n");
+		      break;
+	      }
+
+         /* assign new */
+         pipe_surface_reference(&sp->framebuffer.cbufs[i], cb);
+	 
+	 struct softpipe_screen* scr = pipe->screen;
+	 struct sw_winsys *winsys = scr->winsys;
+	 struct pipe_surface *surf = sp->framebuffer.cbufs[i];
+
+	 uint8_t *map = winsys->displaytarget_map(winsys, ((struct softpipe_resource*) surf->texture)->dt, PIPE_TRANSFER_WRITE);
+	 printf("Map! %p\n", map);
+	 for (int j = 0; j < (768/2); ++j) {
+		 for (int i = 0; i < 1366; ++i) {
+			 map[((i + (1366*j))*4)] = 0xFF;
+			 map[((i + (1366*j))*4)+1] = 0x00;
+			 map[((i + (1366*j))*4)+2] = 0x00;
+			 map[((i + (1366*j))*4)+3] = 0xFF;
+		 }
+	 }
+
+      }
+   }
+
+   sp->framebuffer.nr_cbufs = fb->nr_cbufs;
 
    sp->framebuffer.width = fb->width;
    sp->framebuffer.height = fb->height;
