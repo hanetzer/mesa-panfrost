@@ -600,12 +600,14 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		.uses_ssa = true,
 		.ssa_args = {
 			.src0 = components == 2 || components == 0 ? src0 : SSA_UNUSED_1,
-			.src1 = components == 2 ? src1 : components == 1 ? src0 : SSA_UNUSED_0,
+			.src1 = components == 2 ? src1 : components == 1 ? src0 : 0,
 			.dest = dest,
 			.inline_constant = components == 0
 		},
 		.vector = is_vector
 	};
+
+	printf("%d, %d\n", ins.ssa_args.src0, ins.ssa_args.src1);
 
 	nir_alu_src *nirmod0 = NULL;
 	nir_alu_src *nirmod1 = NULL;
@@ -871,6 +873,7 @@ allocate_registers(compiler_context *ctx)
 				ins->registers.inline_2 = args.inline_constant;
 
 				if (args.inline_constant && args.src1 != 0) {
+					printf("src0 %d\n", args.src0);
 					printf("TODO: Encode inline constant %d\n", args.src1);
 				} else {
 					ins->registers.input2_reg = dealias_register(ctx, ins, args.src1, ins->uses_ssa);
@@ -1166,7 +1169,9 @@ inline_alu_constants(compiler_context *ctx)
 		if (!alu->uses_ssa) continue;
 
 		CONDITIONAL_ATTACH(src0);
-		CONDITIONAL_ATTACH(src1);
+
+		if (!alu->ssa_args.inline_constant)
+			CONDITIONAL_ATTACH(src1);
 	}
 }
 
