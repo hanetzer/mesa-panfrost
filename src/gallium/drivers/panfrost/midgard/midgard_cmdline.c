@@ -39,6 +39,7 @@
 #include "compiler/nir_types.h"
 #include "main/imports.h"
 #include "compiler/nir/nir_builder.h"
+#include "util/half_float.h"
 
 bool c_do_mat_op_to_vec(struct exec_list *instructions);
 
@@ -872,9 +873,19 @@ allocate_registers(compiler_context *ctx)
 
 				ins->registers.inline_2 = args.inline_constant;
 
-				if (args.inline_constant && args.src1 != 0) {
-					printf("src0 %d\n", args.src0);
-					printf("TODO: Encode inline constant %d\n", args.src1);
+				if (args.inline_constant) {
+					/* Encode inline 16-bit constant */
+
+					ins->registers.input2_reg = args.src1 >> 11;
+
+					int lower_11 = args.src1 & ((1 << 12) - 1);
+
+					if (ins->vector) {
+						uint16_t imm = ((lower_11 >> 8) & 0x7) | ((lower_11 & 0xFF) << 3);
+						ins->vector_alu.src2 = imm << 2;
+					}
+					else
+						ins->scalar_alu.src2 = lower_11;
 				} else {
 					ins->registers.input2_reg = dealias_register(ctx, ins, args.src1, ins->uses_ssa);
 				}
