@@ -1020,7 +1020,7 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					++index;
 					break;
 				} else if (ains->compact_branch) {
-					/* XXX: Workaround hardware errata where branches cannot standalone in a word by including a dummy move */
+					/* ERRATA: Workaround hardware errata where branches cannot standalone in a word by including a dummy move */
 					if (index == 0) {
 						midgard_instruction ins = v_fmov(0, blank_alu_src, 0, true, midgard_outmod_none);
 
@@ -1564,7 +1564,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 	util_dynarray_init(compiled, NULL);
 	util_dynarray_init(&tags, NULL);
 
-	/* XXX: Workaround hardware errata where shaders must start with a
+	/* ERRATA: Workaround hardware errata where shaders must start with a
 	 * load/store instruction by adding a noop load */
 
 	int first_tag = 0;
