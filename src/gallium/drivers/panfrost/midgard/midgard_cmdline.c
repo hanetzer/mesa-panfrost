@@ -156,7 +156,9 @@ const midgard_vector_alu_src blank_alu_src = {
 	.swizzle = SWIZZLE(COMPONENT_X, COMPONENT_Y, COMPONENT_Z, COMPONENT_W),
 };
 
-const midgard_scalar_alu_src blank_scalar_alu_src = {};
+const midgard_scalar_alu_src blank_scalar_alu_src = {
+	.full = true
+};
 
 /* Used for encoding the unused source of 1-op instructions */
 const midgard_vector_alu_src zero_alu_src = { 0 };
@@ -437,6 +439,7 @@ unit_enum_to_midgard(int unit_enum, int is_vector) {
 
 /* Unit: shorthand for the unit used by this instruction (MUL, ADD, LUT).
  * Components: Number/style of arguments:
+ * 	3: One-argument op with r24 (i2f, f2i)
  * 	2: Standard two argument op (fadd, fmul)
  * 	1: Flipped one-argument op (fmov, imov)
  * 	0: Standard one-argument op (frcp)
@@ -513,6 +516,8 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		ALU_CASE(MUL, 2, fmul, fmul);
 		ALU_CASE(MUL, 2, fmin, fmin);
 		ALU_CASE(MUL, 2, fmax, fmax);
+		ALU_CASE(MUL, 2, imin, imin);
+		ALU_CASE(MUL, 2, imax, imax);
 		ALU_CASE(MUL, 1, fmov, fmov);
 		ALU_CASE(MUL, 1, ffloor, ffloor);
 		ALU_CASE(MUL, 1, fceil, fceil);
@@ -523,29 +528,29 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		ALU_CASE(ADD, 2, iadd, iadd);
 		ALU_CASE(ADD, 2, isub, isub);
 		ALU_CASE(MUL, 2, imul, imul);
-
-		/* TODO: How does imov work, exactly? */
-		ALU_CASE(MUL, 1, imov, fmov);
+		ALU_CASE(MUL, 1, imov, imov);
 
 		ALU_CASE(MUL, 2, feq, feq);
 		ALU_CASE(MUL, 2, fne, fne);
 		ALU_CASE(MUL, 2, flt, flt);
 		//ALU_CASE(MUL, 2, fle);
-		ALU_CASE(MUL, 1, f2i32, f2u);
-		ALU_CASE(MUL, 1, f2u32, f2u);
 		ALU_CASE(MUL, 2, ieq, ieq);
 		ALU_CASE(MUL, 2, ine, ine);
 		ALU_CASE(MUL, 2, ilt, ilt);
 		//ALU_CASE(MUL, 2, ile);
-		//ALU_CASE(MUL, 2, csel, csel);
-		ALU_CASE(MUL, 1, i2f32, i2f);
-		ALU_CASE(MUL, 1, u2f32, i2f);
+		//ALU_CASE(MUL, 2, fcsel, fcsel);
+		//ALU_CASE(MUL, 2, icsel, icsel);
 		//ALU_CASE(LUT, 0, fatan_pt2);
 		ALU_CASE(LUT, 0, frcp, frcp);
 		ALU_CASE(LUT, 0, frsq, frsqrt);
 		ALU_CASE(LUT, 0, fsqrt, fsqrt);
 		ALU_CASE(LUT, 0, fexp2, fexp2);
 		ALU_CASE(LUT, 0, flog2, flog2);
+
+		ALU_CASE(ADD, 3, f2i32, f2i);
+		ALU_CASE(ADD, 3, f2u32, f2u);
+		ALU_CASE(ADD, 3, i2f32, i2f);
+		ALU_CASE(ADD, 3, u2f32, u2f);
 
 		// Input needs to be divided by pi due to Midgard weirdness We
 		// define special NIR ops, fsinpi and fcospi, that include the
@@ -558,6 +563,13 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 
 		//ALU_CASE(LUT, 0, fatan_pt1);
 
+		ALU_CASE(ADD, 2, iand, iand);
+		ALU_CASE(ADD, 2, ior, ior);
+		ALU_CASE(ADD, 2, ixor, ixor);
+		ALU_CASE(ADD, 1, inot, inot);
+		ALU_CASE(ADD, 2, ishl, ishl);
+		ALU_CASE(ADD, 2, ishr, iasr);
+		//ALU_CASE(ADD, 2, ilsr, ilsr);
 
 		default:
 			printf("Unhandled ALU op\n");
@@ -610,7 +622,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 	 * needs it, or else we may segfault. */
 
 	unsigned src0 = instr->src[0].src.ssa->index;
-	unsigned src1 = components > 1 ? instr->src[1].src.ssa->index : 0;
+	unsigned src1 = (components == 1 || components == 2) ? instr->src[1].src.ssa->index : 0;
 
 	/* Rather than use the instruction generation helpers, we do it
 	 * ourselves here to avoid the mess */
@@ -621,8 +633,8 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		.unused = false,
 		.uses_ssa = true,
 		.ssa_args = {
-			.src0 = components == 2 || components == 0 ? src0 : SSA_UNUSED_1,
-			.src1 = components == 2 ? src1 : components == 1 ? src0 : 0,
+			.src0 = components == 3 || components == 2 || components == 0 ? src0 : SSA_UNUSED_1,
+			.src1 = components == 2 ? src1 : components == 1 ? src0 : components == 0 ? 0 : SSA_UNUSED_1,
 			.dest = dest,
 			.inline_constant = components == 0
 		},
@@ -1074,10 +1086,6 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 						case midgard_alu_op_ile: 
 						case midgard_alu_op_fcsel: 
 						case midgard_alu_op_icsel: 
-						case midgard_alu_op_f2i: 
-						case midgard_alu_op_i2f: 
-						case midgard_alu_op_f2u: 
-						case midgard_alu_op_u2f: 
 							ains->unit = ains->vector ? ALU_ENAB_VEC_ADD : ALU_ENAB_SCAL_MUL;
 							break;
 						case midgard_alu_op_fmul:
@@ -1446,6 +1454,9 @@ embedded_to_inline_constant(compiler_context *ctx)
 					case midgard_alu_op_feq: 
 					case midgard_alu_op_ieq: 
 					case midgard_alu_op_ine: 
+					case midgard_alu_op_iand:
+					case midgard_alu_op_ior:
+					case midgard_alu_op_ixor:
 						ins->ssa_args.src0 = ins->ssa_args.src1;
 						ins->ssa_args.src1 = SSA_FIXED_REGISTER(REGISTER_CONSTANT);
 
@@ -1862,8 +1873,7 @@ static const nir_shader_compiler_options nir_options = {
 	.lower_extract_byte = true,
 	.lower_extract_word = true,
 
-	/* TODO: Reenable when integer ops are understood */
-	.native_integers = false
+	.native_integers = true
 };
 
 int main(int argc, char **argv)
