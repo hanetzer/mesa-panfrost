@@ -992,6 +992,7 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 			/* TODO: Constant combining */
 			int index = 0, last_unit = 0;
 			bool has_embedded_constants = false;
+			float constants[4];
 
 			while (ins + index) {
 				midgard_instruction *ains = ins + index; 
@@ -1023,6 +1024,7 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					if (has_embedded_constants) break;
 
 					has_embedded_constants = true;
+					memcpy(constants, ains->constants, sizeof(constants));
 				}
 
 				control |= ains->unit;
@@ -1075,7 +1077,7 @@ skip_instruction:
 			}
 
 			/* Constants must always be quadwords */
-			if (ins->has_constants) {
+			if (has_embedded_constants) {
 				bytes_emitted += 16;
 			}
 
@@ -1096,11 +1098,12 @@ skip_instruction:
 
 			/* Tack on constants */
 
-			if (ins->has_constants) {
-				EMIT_AND_COUNT(float, ins->constants[0]);
-				EMIT_AND_COUNT(float, ins->constants[1]);
-				EMIT_AND_COUNT(float, ins->constants[2]);
-				EMIT_AND_COUNT(float, ins->constants[3]);
+			if (has_embedded_constants) {
+				printf("<%f, %f...>\n", constants[0], constants[1]);
+				EMIT_AND_COUNT(float, constants[0]);
+				EMIT_AND_COUNT(float, constants[1]);
+				EMIT_AND_COUNT(float, constants[2]);
+				EMIT_AND_COUNT(float, constants[3]);
 			}
 
 			break;
