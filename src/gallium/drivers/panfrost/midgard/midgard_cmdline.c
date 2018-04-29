@@ -1762,7 +1762,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 			/* Artefact of load_const, etc in the average case */
 			inline_alu_constants(ctx);
-			embedded_to_inline_constant(ctx);
+			//embedded_to_inline_constant(ctx); /* Reenable when it's integer aware */
 			eliminate_constant_mov(ctx);
 			eliminate_varying_mov(ctx);
 
