@@ -1157,15 +1157,21 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					}
 				}
 
-				control |= ains->unit;
-				last_unit = ains->unit;
-
 				if (ains->vector) {
 					emit_binary_vector_instruction(ains, register_words,
 							&register_words_count, body_words,
 							body_size, &body_words_count, &bytes_emitted);
 				} else if (ains->compact_branch) {
-					/* ERRATA: Workaround hardware errata where branches cannot stand alone in a word by including a dummy move */
+					/* ERRATA: Workaround hardware errata
+					 * where branches cannot stand alone in
+					 * a word by including a dummy move */
+
+					/* XXX: This is not the issue per se.
+					 * Rather, all of r0 has to be written
+					 * out along with the branch writeout.
+					 * For now, emit a dummy move always
+					 * (slow!) */
+
 					if (index == 0) {
 						midgard_instruction ins = v_fmov(0, blank_alu_src, 0, true, midgard_outmod_none);
 
@@ -1174,6 +1180,9 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 						emit_binary_vector_instruction(&ins, register_words,
 								&register_words_count, body_words,
 								body_size, &body_words_count, &bytes_emitted);
+					} else {
+						/* Break it up into its own batch until we can do this right XXX */
+						break;
 					}
 
 					body_size[body_words_count] = sizeof(ains->br_compact);
@@ -1189,6 +1198,10 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					memcpy(&body_words[body_words_count++], &ains->scalar_alu, sizeof(ains->scalar_alu));
 					bytes_emitted += sizeof(midgard_scalar_alu);
 				}
+
+				/* Defer marking until after writing to allow for break */
+				control |= ains->unit;
+				last_unit = ains->unit;
 
 skip_instruction:
 				++index;
