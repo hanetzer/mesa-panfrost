@@ -883,9 +883,14 @@ allocate_registers(compiler_context *ctx)
 					if (ins->vector) {
 						uint16_t imm = ((lower_11 >> 8) & 0x7) | ((lower_11 & 0xFF) << 3);
 						ins->vector_alu.src2 = imm << 2;
+					} else {
+						uint16_t imm = 0;
+						imm |= (lower_11 >> 9) & 3;
+						imm |= (lower_11 >> 6) & 4;
+						imm |= (lower_11 >> 2) & 0x38;
+						imm |= (lower_11 & 63) << 6;
+						ins->scalar_alu.src2 = imm;
 					}
-					else
-						ins->scalar_alu.src2 = lower_11;
 				} else {
 					ins->registers.input2_reg = dealias_register(ctx, ins, args.src1, ins->uses_ssa);
 				}
@@ -1319,6 +1324,52 @@ eliminate_varying_mov(compiler_context *ctx)
 	}
 }
 
+/* Midgard supports two types of constants, embedded constants (128-bit) and
+ * inline constants (16-bit). Sometimes, especially with scalar ops, embedded
+ * constants can be demoted to inline constants, for space savings and
+ * sometimes a performance boost */
+
+static void
+embedded_to_inline_constant(compiler_context *ctx)
+{
+	util_dynarray_foreach(&ctx->current_block, midgard_instruction, ins) {
+		if (!ins->has_constants) continue;
+		if (ins->ssa_args.inline_constant) continue;
+
+		/* src1 cannot be an inline constant due to encoding
+		 * restrictions; TODO: move source over */
+
+		if (ins->ssa_args.src1 == SSA_FIXED_REGISTER(REGISTER_CONSTANT)) {
+			if (ins->vector) {
+				/* TODO */
+				printf("Maybe missed vector inlining\n");
+			} else {
+				midgard_scalar_alu_src_t *src;
+				int q = ins->scalar_alu.src2;
+				midgard_scalar_alu_src_t *m = (midgard_scalar_alu_src_t *) &q;
+				src = m;
+
+				assert(!src->abs);
+				assert(!src->negate);
+				assert(src->full);
+
+				float constant = ins->constants[src->component];
+				printf("Inlining %f\n", constant);
+				uint16_t halfconstant = _mesa_float_to_half(constant);
+
+				/* Get rid of the embedded constant */
+				ins->has_constants = false; 
+				ins->ssa_args.inline_constant = true;
+				ins->ssa_args.src1 = halfconstant;
+			}
+		} else {
+			/* TODO */
+			printf("Missed opportunity to flip instruction?\n");
+		}
+	}
+}
+
+
 
 
 /* Map normal SSA sources to other SSA sources / fixed registers (like
@@ -1559,6 +1610,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 			/* Artefact of load_const, etc in the average case */
 			inline_alu_constants(ctx);
+			embedded_to_inline_constant(ctx);
 			eliminate_constant_mov(ctx);
 			eliminate_varying_mov(ctx);
 
