@@ -1375,9 +1375,39 @@ embedded_to_inline_constant(compiler_context *ctx)
 		}
 
 		if (ins->ssa_args.src1 == SSA_FIXED_REGISTER(REGISTER_CONSTANT)) {
+			int component = 0;
+
 			if (ins->vector) {
-				/* TODO */
-				printf("Maybe missed vector inlining\n");
+				midgard_vector_alu_src_t *src;
+				int q = ins->vector_alu.src2;
+				midgard_vector_alu_src_t *m = (midgard_vector_alu_src_t *) &q;
+				src = m;
+
+				assert(!src->abs);
+				assert(!src->negate);
+				assert(!src->half);
+				assert(!src->rep_low);
+				assert(!src->rep_high);
+
+				/* Make sure that the constant is not itself a
+				 * vector by checking if the swizzle is
+				 * uniform. If it's not uniform, skip this
+				 * constant; we can't embed it (ignoring, uh,
+				 * int8?) */
+
+				component = (src->swizzle >> 6) & 3;
+
+				bool is_vector = false;
+
+				for (int c = 0; c < 3; ++c) {
+					if (((src->swizzle >> (2 * c)) & 3) != component) {
+						is_vector = true;
+						break;
+					}
+				}
+
+				if (is_vector)
+					continue;
 			} else {
 				midgard_scalar_alu_src_t *src;
 				int q = ins->scalar_alu.src2;
@@ -1388,20 +1418,19 @@ embedded_to_inline_constant(compiler_context *ctx)
 				assert(!src->negate);
 				assert(src->full);
 
-				float constant = ins->constants[src->component];
-				uint16_t halfconstant = _mesa_float_to_half(constant);
-
-				/* Get rid of the embedded constant */
-				ins->has_constants = false; 
-				ins->ssa_args.inline_constant = true;
-				ins->ssa_args.src1 = halfconstant;
+				component = src->component;
 			}
+
+			/* Get rid of the embedded constant */
+			float constant = ins->constants[component];
+			uint16_t halfconstant = _mesa_float_to_half(constant);
+
+			ins->has_constants = false; 
+			ins->ssa_args.inline_constant = true;
+			ins->ssa_args.src1 = halfconstant;
 		}
 	}
 }
-
-
-
 
 /* Map normal SSA sources to other SSA sources / fixed registers (like
  * uniforms) */
