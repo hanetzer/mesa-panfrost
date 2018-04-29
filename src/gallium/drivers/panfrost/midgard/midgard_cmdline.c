@@ -1017,14 +1017,22 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 				if (last_unit >= ALU_ENAB_VEC_ADD && ains->unit >= ALU_ENAB_VEC_ADD) break;
 
 				/* Only one set of embedded constants per
-				 * bundle possible; if we duplicate, we must
+				 * bundle possible; if we have more, we must
 				 * break the chain early, unfortunately */
 
 				if (ains->has_constants) {
-					if (has_embedded_constants) break;
+					if (has_embedded_constants) {
+						/* ...but if there are already
+						 * constants but these are the
+						 * *same* constants, we let it
+						 * through */
 
-					has_embedded_constants = true;
-					memcpy(constants, ains->constants, sizeof(constants));
+						if (memcmp(constants, ains->constants, sizeof(constants)))
+							break;
+					} else {
+						has_embedded_constants = true;
+						memcpy(constants, ains->constants, sizeof(constants));
+					}
 				}
 
 				control |= ains->unit;
