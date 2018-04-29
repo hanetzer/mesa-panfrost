@@ -571,6 +571,11 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		ALU_CASE(ADD, 2, ishr, iasr);
 		//ALU_CASE(ADD, 2, ilsr, ilsr);
 
+		ALU_CASE(MUL, 2, ball_fequal4, fball_eq);
+		ALU_CASE(MUL, 2, bany_fnequal4, fbany_neq);
+		ALU_CASE(MUL, 2, ball_iequal4, iball_eq);
+		ALU_CASE(MUL, 2, bany_inequal4, ibany_neq);
+
 		default:
 			printf("Unhandled ALU op\n");
 			break;
