@@ -688,7 +688,31 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		ins.scalar_alu = alu;
 	}
 
-	util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
+	if (unit == UNIT_LUT) {
+		/* To avoid duplicating the LUTs (we think?), LUT instructions can only
+		 * operate as if they were scalars. Lower them here by changing the
+		 * component. */
+
+		assert(instr->dest.dest.is_ssa);
+		assert(components == 0);
+
+		nir_ssa_def dest = instr->dest.dest.ssa;
+
+		uint8_t original_swizzle[4];
+		memcpy(original_swizzle, nirmod0->swizzle, sizeof(nirmod0->swizzle));
+
+		for (int i = 0; i < dest.num_components; ++i) {
+			ins.vector_alu.mask = (0x3) << (2 * i); /* Mask the associated component */
+
+			for (int j = 0; j < 4; ++j)
+				nirmod0->swizzle[j] = original_swizzle[i]; /* Pull from the correct component */
+
+			ins.vector_alu.src1 = vector_alu_srco_unsigned(vector_alu_modifiers(nirmod0));
+			util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
+		}
+	} else {
+		util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
+	}
 }
 
 static void
