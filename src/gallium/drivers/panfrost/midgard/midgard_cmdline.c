@@ -44,6 +44,7 @@
 bool c_do_mat_op_to_vec(struct exec_list *instructions);
 
 #include "midgard.h"
+#include "helpers.h"
 
 // #define STAGE_PROFILING
 #define NIR_DEBUG
