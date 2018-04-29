@@ -468,7 +468,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 
 			midgard_instruction ins = {
 				.type = TAG_ALU_4,
-				.unit = ALU_ENAB_SCAL_MUL,
+				.unit = ALU_ENAB_SCAL_ADD,
 				.unused = false,
 				.uses_ssa = true,
 				.ssa_args = {
@@ -579,6 +579,26 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 
 		default:
 			break;
+	}
+
+	/* To aid scheduling, make sure that we use the earliest pipeline stage
+	 * possible for the instruction. This means VMUL for vectors and SADD
+	 * for scalars, if that's possible. MUL is already the default, but
+	 * scalars need to be transferred */
+
+	if (!is_vector && unit == UNIT_MUL) {
+		switch (instr->op) {
+			/* The following ops require a multiplier and therefore
+			 * cannot be transferred */
+
+			case midgard_alu_op_fmul:
+				break;
+
+			default:
+				/* TODO: XXX: FIGURE OUT WHY THIS BREAKS */
+				//unit = UNIT_ADD;
+				break;
+		}
 	}
 
 	/* Initialise fields common between scalar/vector instructions */
@@ -1030,19 +1050,46 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					bool break_batch = false;
 
 					switch (op) {
+						/* The following ops work on
+						 * either adders or multiplers,
+						 * and are migrated
+						 * appropriately for
+						 * vector/scalar */
+
+						case midgard_alu_op_fmov: 
+						case midgard_alu_op_ffloor: 
+						case midgard_alu_op_fceil: 
 						case midgard_alu_op_fmin: 
-							ains->unit = unit_enum_to_midgard(UNIT_ADD, ains->vector);
-							printf("Saved\n");
+						case midgard_alu_op_fmax: 
+						case midgard_alu_op_feq: 
+						case midgard_alu_op_ieq: 
+						case midgard_alu_op_ine: 
+						case midgard_alu_op_fne: 
+						case midgard_alu_op_flt: 
+						case midgard_alu_op_fle: 
+						case midgard_alu_op_ilt: 
+						case midgard_alu_op_ile: 
+						case midgard_alu_op_csel: 
+						case midgard_alu_op_f2i: 
+						case midgard_alu_op_i2f: 
+						//case midgard_alu_op_f2u: 
+						//case midgard_alu_op_u2f: 
+							ains->unit = ains->vector ? ALU_ENAB_VEC_ADD : ALU_ENAB_SCAL_MUL;
+							break;
+						case midgard_alu_op_fmul:
+							/* LUT doubles as an extra multiplier */
+							if (ains->vector)
+								ains->unit = unit_enum_to_midgard(UNIT_LUT, ains->vector);
+							else
+								break_batch = true;
 							break;
 						default:
 							break_batch = true;
 							break;
 					}
 
-					if (break_batch) {
-						printf("Broken\n");
+					if (break_batch)
 						break;
-					}
 				}
 
 				/* Late unit check, this time for encoding (not parallelism) */
