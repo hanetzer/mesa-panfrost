@@ -534,13 +534,12 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 
 		ALU_CASE(MUL, 2, feq, feq);
 		ALU_CASE(MUL, 2, fne, fne);
-		ALU_CASE(MUL, 2, flt, flt);
+		ALU_CASE(ADD, 2, flt, flt);
 		//ALU_CASE(MUL, 2, fle);
 		ALU_CASE(MUL, 2, ieq, ieq);
 		ALU_CASE(MUL, 2, ine, ine);
 		ALU_CASE(MUL, 2, ilt, ilt);
 		//ALU_CASE(MUL, 2, ile);
-		//ALU_CASE(MUL, 2, fcsel, fcsel);
 		//ALU_CASE(MUL, 2, icsel, icsel);
 		//ALU_CASE(LUT, 0, fatan_pt2);
 		ALU_CASE(LUT, 0, frcp, frcp);
@@ -578,6 +577,32 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		ALU_CASE(MUL, 2, ball_iequal4, iball_eq);
 		ALU_CASE(MUL, 2, bany_inequal4, ibany_neq);
 
+		case nir_op_bcsel: {
+			unit = UNIT_MUL;
+			components = 2;
+			op = midgard_alu_op_fcsel;
+
+			/* csel puts the condition in r31.w and the inputs are
+			 * shifted over one from NIR */
+
+			/* XXX: Force component correct */
+			int condition = instr->src[0].src.ssa->index;
+
+			const midgard_vector_alu_src alu_src = {
+				.swizzle = SWIZZLE(COMPONENT_X, COMPONENT_X, COMPONENT_X, COMPONENT_X),
+			};
+
+			midgard_instruction ins = v_fmov(condition, alu_src, 31, true, midgard_outmod_none);
+			ins.vector_alu.mask = 0x3 << 6; /* mask out w */
+
+			util_dynarray_append(&(ctx->current_block), midgard_instruction, ins);
+			//alias_ssa(ctx, instr->src[0].src.ssa->index, SSA_FIXED_REGISTER(31), true);
+
+			memmove(instr->src, instr->src + 1, 2 * sizeof(nir_alu_src));
+			printf("Srcs %d %d\n", instr->src[0].src.ssa->index, instr->src[1].src.ssa->index);
+			break;
+		}
+
 		default:
 			printf("Unhandled ALU op\n");
 			break;
@@ -612,6 +637,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 			 * cannot be transferred */
 
 			case midgard_alu_op_fmul:
+			case midgard_alu_op_fcsel:
 				break;
 
 			default:

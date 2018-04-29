@@ -27,7 +27,14 @@ a = 'a'
 b = 'b'
 
 algebraic = [
-    (('f2b', a), ('fne', a, 0.0))
+    (('f2b', a), ('fne', a, 0.0)),
+    (('isign', a), ('imin', ('imax', a, -1), 1)),
+    (('fge', a, b), ('flt', b, a)),
+
+    # XXX: We have hw ops for this, just unknown atm..
+    #(('fsign@32', a), ('i2f32@32', ('isign', ('f2i32@32', ('fmul', a, 0x43800000)))))
+    #(('fsign', a), ('fcsel', ('fge', a, 0), 1.0, ('fcsel', ('flt', a, 0.0), -1.0, 0.0)))
+    (('fsign', a), ('bcsel', ('fge', a, 0), 1.0, -1.0))
 ]
 
 def main():
