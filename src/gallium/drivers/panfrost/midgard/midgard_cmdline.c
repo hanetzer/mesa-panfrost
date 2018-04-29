@@ -1000,6 +1000,21 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 				if (ains->unused) goto skip_instruction;
 				if (ains->type != TAG_ALU_4 || ains->unit <= last_unit) break;
 
+				/* According to the presentation "The ARM
+				 * Mali-T880 Mobile GPU" from HotChips 27,
+				 * there are two pipeline stages. Lines are executed in parallel: 
+				 *
+				 * [ VMUL ] [ SADD ]
+				 * [ VADD ] [ SMUL ] [ LUT ]
+				 *
+				 * Verify that there are no ordering dependencies here.
+				 *
+				 * TODO: Allow for parallelism!!!
+				 */
+
+				if (last_unit && last_unit < ALU_ENAB_VEC_ADD && ains->unit < ALU_ENAB_VEC_ADD) break;
+				if (last_unit >= ALU_ENAB_VEC_ADD && ains->unit >= ALU_ENAB_VEC_ADD) break;
+
 				/* Only one set of embedded constants per
 				 * bundle possible; if we duplicate, we must
 				 * break the chain early, unfortunately */
@@ -1017,10 +1032,8 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					emit_binary_vector_instruction(ains, register_words,
 							&register_words_count, body_words,
 							body_size, &body_words_count, &bytes_emitted);
-					++index;
-					break;
 				} else if (ains->compact_branch) {
-					/* ERRATA: Workaround hardware errata where branches cannot standalone in a word by including a dummy move */
+					/* ERRATA: Workaround hardware errata where branches cannot stand alone in a word by including a dummy move */
 					if (index == 0) {
 						midgard_instruction ins = v_fmov(0, blank_alu_src, 0, true, midgard_outmod_none);
 
@@ -1043,10 +1056,6 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					body_size[body_words_count] = sizeof(midgard_scalar_alu_t);
 					memcpy(&body_words[body_words_count++], &ains->scalar_alu, sizeof(ains->scalar_alu));
 					bytes_emitted += sizeof(midgard_scalar_alu_t);
-
-					/* TODO: Emit pipeline registers and batch instructions */
-					++index;	
-					break;
 				}
 
 skip_instruction:
