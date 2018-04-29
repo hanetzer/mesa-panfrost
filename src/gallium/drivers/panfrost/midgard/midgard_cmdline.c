@@ -1016,7 +1016,8 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 				 * TODO: Allow for parallelism!!!
 				 */
 
-				if (last_unit >= ALU_ENAB_VEC_ADD && ains->unit >= ALU_ENAB_VEC_ADD) break;
+				if (last_unit >= ALU_ENAB_VEC_ADD && ains->unit >= ALU_ENAB_VEC_ADD
+						&& ains->unit < ALU_ENAB_BR_COMPACT) break;
 
 				if (last_unit && last_unit < ALU_ENAB_VEC_ADD && ains->unit < ALU_ENAB_VEC_ADD) {
 					/* It may be possible to switch the
