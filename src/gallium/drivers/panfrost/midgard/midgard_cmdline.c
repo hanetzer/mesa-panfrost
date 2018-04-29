@@ -1337,7 +1337,45 @@ embedded_to_inline_constant(compiler_context *ctx)
 		if (ins->ssa_args.inline_constant) continue;
 
 		/* src1 cannot be an inline constant due to encoding
-		 * restrictions; TODO: move source over */
+		 * restrictions. So, if possible we try to flip the arguments
+		 * in that case */
+
+		if (ins->ssa_args.src0 == SSA_FIXED_REGISTER(REGISTER_CONSTANT)) {
+			if (ins->vector) {
+				printf("Maybe missed vector flip\n");
+			} else {
+				/* Flip based on op. Fallthrough intentional */
+
+				switch (ins->scalar_alu.op) {
+					/* These ops require an operational change to flip their arguments TODO */
+					case midgard_alu_op_fne: 
+					case midgard_alu_op_flt: 
+					case midgard_alu_op_fle: 
+					case midgard_alu_op_ilt: 
+					case midgard_alu_op_ile: 
+					case midgard_alu_op_csel: 
+						printf("Missed non-commutative flip\n");
+						break;
+
+					/* These ops are commutative and Just Flip */
+					case midgard_alu_op_fadd: 
+					case midgard_alu_op_fmul: 
+					case midgard_alu_op_fmin: 
+					case midgard_alu_op_fmax: 
+					case midgard_alu_op_iadd: 
+					case midgard_alu_op_isub: 
+					case midgard_alu_op_imul: 
+					case midgard_alu_op_feq: 
+					case midgard_alu_op_ieq: 
+					case midgard_alu_op_ine: 
+						ins->ssa_args.src0 = ins->ssa_args.src1;
+						ins->ssa_args.src1 = SSA_FIXED_REGISTER(REGISTER_CONSTANT);
+
+					default:
+						break;
+				}
+			}
+		}
 
 		if (ins->ssa_args.src1 == SSA_FIXED_REGISTER(REGISTER_CONSTANT)) {
 			if (ins->vector) {
@@ -1362,9 +1400,6 @@ embedded_to_inline_constant(compiler_context *ctx)
 				ins->ssa_args.inline_constant = true;
 				ins->ssa_args.src1 = halfconstant;
 			}
-		} else {
-			/* TODO */
-			printf("Missed opportunity to flip instruction?\n");
 		}
 	}
 }
