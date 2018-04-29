@@ -1002,7 +1002,7 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 
 				/* Ensure that the chain can continue */
 				if (ains->unused) goto skip_instruction;
-				if (ains->type != TAG_ALU_4 || ains->unit <= last_unit) break;
+				if (ains->type != TAG_ALU_4) break;
 
 				/* According to the presentation "The ARM
 				 * Mali-T880 Mobile GPU" from HotChips 27,
@@ -1016,8 +1016,36 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 				 * TODO: Allow for parallelism!!!
 				 */
 
-				if (last_unit && last_unit < ALU_ENAB_VEC_ADD && ains->unit < ALU_ENAB_VEC_ADD) break;
 				if (last_unit >= ALU_ENAB_VEC_ADD && ains->unit >= ALU_ENAB_VEC_ADD) break;
+
+				if (last_unit && last_unit < ALU_ENAB_VEC_ADD && ains->unit < ALU_ENAB_VEC_ADD) {
+					/* It may be possible to switch the
+					 * unit of the instruction to enable
+					 * pipelined fake VLIW. If so, handle
+					 * that here. If not, we have to break
+					 * the batch. */
+
+					int op = ains->vector ? ains->vector_alu.op : ains->scalar_alu.op;
+					bool break_batch = false;
+
+					switch (op) {
+						case midgard_alu_op_fmin: 
+							ains->unit = unit_enum_to_midgard(UNIT_ADD, ains->vector);
+							printf("Saved\n");
+							break;
+						default:
+							break_batch = true;
+							break;
+					}
+
+					if (break_batch) {
+						printf("Broken\n");
+						break;
+					}
+				}
+
+				/* Late unit check, this time for encoding (not parallelism) */
+				if (ains->unit <= last_unit) break;
 
 				/* Only one set of embedded constants per
 				 * bundle possible; if we have more, we must
