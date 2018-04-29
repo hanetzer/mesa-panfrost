@@ -44,6 +44,7 @@
 bool c_do_mat_op_to_vec(struct exec_list *instructions);
 
 #include "midgard.h"
+#include "midgard_nir.h"
 #include "helpers.h"
 
 // #define STAGE_PROFILING
@@ -366,6 +367,7 @@ optimise_nir(nir_shader *nir)
 	do {
 		progress = false;
 
+		NIR_PASS(progress, nir, midgard_nir_lower_algebraic);
 		NIR_PASS(progress, nir, nir_lower_io, nir_var_all, glsl_type_size, 0);
 		NIR_PASS(progress, nir, nir_lower_var_copies);
 		NIR_PASS(progress, nir, nir_lower_vars_to_ssa);
@@ -1872,6 +1874,7 @@ static const nir_shader_compiler_options nir_options = {
 	.lower_fmod32 = true,
 	.lower_fmod64 = true,
 	.lower_fdiv = true,
+	.lower_b2f = true,
 	.lower_fsinpi = true,
 
 	.vertex_id_zero_based = true,

@@ -27,8 +27,10 @@ a = 'a'
 b = 'b'
 
 algebraic = [
-    (('fadd', a, b), a),
-#   (('b2f', 'x'), ('iand', 'x', 1.0))
+    #(('b2f@32', a), ('iand', a, 0x3f800000))
+    #(('b2f@32', a), ('iand', a, 0x3f800000))
+#    (('b2f', ('f2b', a)), a),
+    (('f2b', a), ('fne', a, 0.0))
 ]
 
 def main():
