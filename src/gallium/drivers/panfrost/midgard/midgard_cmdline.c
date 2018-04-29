@@ -1245,7 +1245,7 @@ eliminate_constant_mov(compiler_context *ctx)
 			/* Check this candidate for usage */
 
 			if (candidate->ssa_args.src0 == target_reg ||
-			    candidate->ssa_args.src1 == target_reg) {
+			    (candidate->ssa_args.src1 == target_reg && !candidate->ssa_args.inline_constant)) {
 				used = true;
 				break;
 			}
