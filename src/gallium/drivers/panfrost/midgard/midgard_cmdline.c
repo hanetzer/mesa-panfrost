@@ -521,8 +521,8 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		ALU_CASE(MUL, 2, imin, imin);
 		ALU_CASE(MUL, 2, imax, imax);
 		ALU_CASE(MUL, 1, fmov, fmov);
-		ALU_CASE(MUL, 1, ffloor, ffloor);
-		ALU_CASE(MUL, 1, fceil, fceil);
+		ALU_CASE(ADD, 0, ffloor, ffloor);
+		ALU_CASE(ADD, 0, fceil, fceil);
 		ALU_CASE(MUL, 2, fdot3, fdot3);
 		//ALU_CASE(MUL, 2, fdot3r);
 		ALU_CASE(MUL, 2, fdot4, fdot4);
