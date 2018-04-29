@@ -89,7 +89,7 @@ typedef struct {
  */
 
 typedef struct midgard_instruction {
-	midgard_word_type type; /* ALU, load/store, texture */
+	unsigned type; /* ALU, load/store, texture */
 
 	/* If the register allocator has not run yet... */
 	bool uses_ssa;
@@ -97,7 +97,7 @@ typedef struct midgard_instruction {
 
 	/* Special fields for an ALU instruction */
 	bool vector; 
-	alu_register_word registers;
+	midgard_reg_info registers;
 
 	/* I.e. (1 << alu_bit) */
 	int unit;
@@ -114,9 +114,9 @@ typedef struct midgard_instruction {
 	bool unused;
 
 	union {
-		midgard_load_store_word_t load_store;
-		midgard_scalar_alu_t scalar_alu;
-		midgard_vector_alu_t vector_alu;
+		midgard_load_store_word load_store;
+		midgard_scalar_alu scalar_alu;
+		midgard_vector_alu vector_alu;
 		uint16_t br_compact;
 		/* TODO Texture */
 	};
@@ -152,19 +152,19 @@ typedef struct midgard_instruction {
 #define M_LOAD(name) M_LOAD_STORE(name, dest, src0)
 #define M_STORE(name) M_LOAD_STORE(name, src0, dest)
 
-const midgard_vector_alu_src_t blank_alu_src = {
+const midgard_vector_alu_src blank_alu_src = {
 	.swizzle = SWIZZLE(COMPONENT_X, COMPONENT_Y, COMPONENT_Z, COMPONENT_W),
 };
 
-const midgard_scalar_alu_src_t blank_scalar_alu_src = {};
+const midgard_scalar_alu_src blank_scalar_alu_src = {};
 
 /* Used for encoding the unused source of 1-op instructions */
-const midgard_vector_alu_src_t zero_alu_src = { 0 };
+const midgard_vector_alu_src zero_alu_src = { 0 };
 
 /* Coerce structs to integer */
 
 static unsigned
-vector_alu_src_to_unsigned(midgard_vector_alu_src_t src)
+vector_alu_srco_unsigned(midgard_vector_alu_src src)
 {
 	unsigned u;
 	memcpy(&u, &src, sizeof(src));
@@ -172,7 +172,7 @@ vector_alu_src_to_unsigned(midgard_vector_alu_src_t src)
 }
 
 static unsigned
-scalar_alu_src_to_unsigned(midgard_scalar_alu_src_t src)
+scalar_alu_srco_unsigned(midgard_scalar_alu_src src)
 {
 	unsigned u;
 	memcpy(&u, &src, sizeof(src));
@@ -182,12 +182,12 @@ scalar_alu_src_to_unsigned(midgard_scalar_alu_src_t src)
 /* Inputs a NIR ALU source, with modifiers attached if necessary, and outputs
  * the corresponding Midgard source */
 
-static midgard_vector_alu_src_t
+static midgard_vector_alu_src
 vector_alu_modifiers(nir_alu_src *src)
 {
 	if (!src) return blank_alu_src;
 
-	midgard_vector_alu_src_t alu_src = {
+	midgard_vector_alu_src alu_src = {
 		.abs = src->abs,
 		.negate = src->negate,
 		.rep_low = 0,
@@ -202,12 +202,12 @@ vector_alu_modifiers(nir_alu_src *src)
 /* Full 1 parameters refer to "non-half-float mode" and "first src in scalar
  * instruction" to account for a weird special case */
 
-static midgard_scalar_alu_src_t
+static midgard_scalar_alu_src
 scalar_alu_modifiers(nir_alu_src *src, bool full1)
 {
 	if (!src) return blank_scalar_alu_src;
 
-	midgard_scalar_alu_src_t alu_src = {
+	midgard_scalar_alu_src alu_src = {
 		.abs = src->abs,
 		.negate = src->negate,
 		.full = 1, /* TODO */
@@ -219,16 +219,16 @@ scalar_alu_modifiers(nir_alu_src *src, bool full1)
 
 static unsigned 
 scalar_move_src(int component, bool full) {
-	midgard_scalar_alu_src_t src = {
+	midgard_scalar_alu_src src = {
 		.full = full,
 		.component = component << 1 /* XXX: Ditto */
 	};
 
-	return scalar_alu_src_to_unsigned(src);
+	return scalar_alu_srco_unsigned(src);
 }
 
 static midgard_instruction
-m_alu_vector(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_src_t mod1, unsigned src1, midgard_vector_alu_src_t mod2, unsigned dest, bool literal_out, midgard_outmod_e outmod)
+m_alu_vector(midgard_alu_op op, int unit, unsigned src0, midgard_vector_alu_src mod1, unsigned src1, midgard_vector_alu_src mod2, unsigned dest, bool literal_out, midgard_outmod outmod)
 {
 	/* TODO: Use literal_out hint during register allocation */
 	midgard_instruction ins = {
@@ -249,8 +249,8 @@ m_alu_vector(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_sr
 			.dest_override = midgard_dest_override_none,
 			.outmod = outmod,
 			.mask = 0xFF,
-			.src1 = vector_alu_src_to_unsigned(mod1),
-			.src2 = vector_alu_src_to_unsigned(mod2)
+			.src1 = vector_alu_srco_unsigned(mod1),
+			.src2 = vector_alu_srco_unsigned(mod2)
 		},
 	};
 
@@ -258,12 +258,12 @@ m_alu_vector(midgard_alu_op_e op, int unit, unsigned src0, midgard_vector_alu_sr
 }
 
 #define M_ALU_VECTOR_1(unit, name) \
-	static midgard_instruction v_##name(unsigned src, midgard_vector_alu_src_t mod1, unsigned dest, bool literal, midgard_outmod_e outmod) { \
+	static midgard_instruction v_##name(unsigned src, midgard_vector_alu_src mod1, unsigned dest, bool literal, midgard_outmod outmod) { \
 		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, SSA_UNUSED_1, zero_alu_src, src, mod1, dest, literal, outmod); \
 	}
 
 #define M_ALU_VECTOR_2(unit, name) \
-	static midgard_instruction v_##name(unsigned src1, midgard_vector_alu_src_t mod1, unsigned src2, midgard_vector_alu_src_t mod2, unsigned dest, bool literal, midgard_outmod_e outmod) { \
+	static midgard_instruction v_##name(unsigned src1, midgard_vector_alu_src mod1, unsigned src2, midgard_vector_alu_src mod2, unsigned dest, bool literal, midgard_outmod outmod) { \
 		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, src1, mod1, src2, mod2, dest, literal, outmod); \
 	}
 
@@ -285,9 +285,9 @@ M_STORE(store_vary_32);
 M_ALU_VECTOR_1(MUL, fmov);
 
 static midgard_instruction
-v_alu_br_compact_cond(midgard_jmp_writeout_op_e op, unsigned tag, signed offset, unsigned cond)
+v_alu_br_compact_cond(midgard_jmp_writeout_op op, unsigned tag, signed offset, unsigned cond)
 {
-	midgard_branch_cond_t branch = {
+	midgard_branch_cond branch = {
 		.op = op,
 		.dest_tag = tag,
 		.offset = offset,
@@ -603,7 +603,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 	}
 
 	/* Initialise fields common between scalar/vector instructions */
-	midgard_outmod_e outmod = instr->dest.saturate ? midgard_outmod_sat : midgard_outmod_none;
+	midgard_outmod outmod = instr->dest.saturate ? midgard_outmod_sat : midgard_outmod_none;
 
 	/* src0 will always exist afaik, but src1 will not for 1-argument
 	 * instructions. The latter can only be fetched if the instruction
@@ -642,24 +642,24 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 	}
 
 	if (is_vector) {
-		midgard_vector_alu_t alu = {
+		midgard_vector_alu alu = {
 			.op = op,
 			.reg_mode = midgard_reg_mode_full,
 			.dest_override = midgard_dest_override_none,
 			.outmod = outmod,
 			.mask = unit == UNIT_LUT ? 0x3 : 0xFF, /* XXX */
-			.src1 = vector_alu_src_to_unsigned(vector_alu_modifiers(nirmod0)),
-			.src2 = vector_alu_src_to_unsigned(vector_alu_modifiers(nirmod1)),
+			.src1 = vector_alu_srco_unsigned(vector_alu_modifiers(nirmod0)),
+			.src2 = vector_alu_srco_unsigned(vector_alu_modifiers(nirmod1)),
 		};
 
 		ins.vector_alu = alu;
 	} else {
 		bool is_full = true; /* TODO */
 
-		midgard_scalar_alu_t alu = {
+		midgard_scalar_alu alu = {
 			.op = op,
-			.src1 = scalar_alu_src_to_unsigned(scalar_alu_modifiers(nirmod0, is_full)),
-			.src2 = scalar_alu_src_to_unsigned(scalar_alu_modifiers(nirmod1, true)),
+			.src1 = scalar_alu_srco_unsigned(scalar_alu_modifiers(nirmod0, is_full)),
+			.src2 = scalar_alu_srco_unsigned(scalar_alu_modifiers(nirmod1, true)),
 			.unknown = 0, /* XXX */
 			.outmod = outmod,
 			.output_full = true, /* XXX */
@@ -706,7 +706,9 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				/* TODO: swizzle, mask */
 
 				midgard_instruction ins = m_load_vary_32(reg, offset);
-				ins.load_store.unknown = 0xA01E9E; /* XXX: What is this? */
+				ins.load_store.is_varying = 1;
+				ins.load_store.interpolation = midgard_interp_default;
+				ins.load_store.unknown = 0x1E9E; /* XXX: What is this? */
 				util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 			} else if (ctx->stage == MESA_SHADER_VERTEX) {
 				midgard_instruction ins = m_load_attr_32(reg, offset);
@@ -888,14 +890,14 @@ allocate_registers(compiler_context *ctx)
 
 		switch (ins->type) {
 			case TAG_ALU_4:
-				ins->registers.input1_reg = dealias_register(ctx, ins, args.src0, ins->uses_ssa);
+				ins->registers.src1_reg = dealias_register(ctx, ins, args.src0, ins->uses_ssa);
 
-				ins->registers.inline_2 = args.inline_constant;
+				ins->registers.src2_imm = args.inline_constant;
 
 				if (args.inline_constant) {
 					/* Encode inline 16-bit constant */
 
-					ins->registers.input2_reg = args.src1 >> 11;
+					ins->registers.src2_reg = args.src1 >> 11;
 
 					int lower_11 = args.src1 & ((1 << 12) - 1);
 
@@ -911,11 +913,11 @@ allocate_registers(compiler_context *ctx)
 						ins->scalar_alu.src2 = imm;
 					}
 				} else {
-					ins->registers.input2_reg = dealias_register(ctx, ins, args.src1, ins->uses_ssa);
+					ins->registers.src2_reg = dealias_register(ctx, ins, args.src1, ins->uses_ssa);
 				}
 
 				/* Output register at the end due to the natural flow of registers, allowing for in place operations */
-				ins->registers.output_reg = dealias_register(ctx, ins, args.dest, ins->uses_ssa && !args.literal_out);
+				ins->registers.out_reg = dealias_register(ctx, ins, args.dest, ins->uses_ssa && !args.literal_out);
 
 				break;
 			
@@ -953,15 +955,15 @@ emit_binary_vector_instruction(midgard_instruction *ains,
 		size_t *bytes_emitted)
 {
 	memcpy(&register_words[(*register_words_count)++], &ains->registers, sizeof(ains->registers));
-	*bytes_emitted += sizeof(alu_register_word);
+	*bytes_emitted += sizeof(midgard_reg_info);
 
-	body_size[*body_words_count] = sizeof(midgard_vector_alu_t);
+	body_size[*body_words_count] = sizeof(midgard_vector_alu);
 	memcpy(&body_words[(*body_words_count)++], &ains->vector_alu, sizeof(ains->vector_alu));
-	*bytes_emitted += sizeof(midgard_vector_alu_t);
+	*bytes_emitted += sizeof(midgard_vector_alu);
 }
 
 static int
-effective_ld_st_reg(midgard_load_store_word_t *ldst)
+effective_ld_st_reg(midgard_load_store_word *ldst)
 {
 	if (OP_IS_STORE(ldst->op))
 		return REGISTER_VARYING_BASE + ldst->reg;
@@ -973,8 +975,8 @@ effective_ld_st_reg(midgard_load_store_word_t *ldst)
  * they can run in parallel for VLIW */
 
 static bool
-can_ld_st_run_concurrent(midgard_load_store_word_t *first,
-			 midgard_load_store_word_t *second)
+can_ld_st_run_concurrent(midgard_load_store_word *first,
+			 midgard_load_store_word *second)
 {
 	/* No registers are touched for the case of two stores, therefore no
 	 * hazard. */
@@ -1070,7 +1072,8 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 						case midgard_alu_op_fle: 
 						case midgard_alu_op_ilt: 
 						case midgard_alu_op_ile: 
-						case midgard_alu_op_csel: 
+						case midgard_alu_op_fcsel: 
+						case midgard_alu_op_icsel: 
 						case midgard_alu_op_f2i: 
 						case midgard_alu_op_i2f: 
 						//case midgard_alu_op_f2u: 
@@ -1141,11 +1144,11 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 					/* TODO: Vector/scalar stuff operates in parallel. This is probably faulty logic */
 
 					memcpy(&register_words[register_words_count++], &ains->registers, sizeof(ains->registers));
-					bytes_emitted += sizeof(alu_register_word);
+					bytes_emitted += sizeof(midgard_reg_info);
 
-					body_size[body_words_count] = sizeof(midgard_scalar_alu_t);
+					body_size[body_words_count] = sizeof(midgard_scalar_alu);
 					memcpy(&body_words[body_words_count++], &ains->scalar_alu, sizeof(ains->scalar_alu));
-					bytes_emitted += sizeof(midgard_scalar_alu_t);
+					bytes_emitted += sizeof(midgard_scalar_alu);
 				}
 
 skip_instruction:
@@ -1208,13 +1211,13 @@ skip_instruction:
 
 			uint64_t current64, next64;
 			
-			midgard_load_store_word_t current = ins->load_store;
+			midgard_load_store_word current = ins->load_store;
 			memcpy(&current64, &current, sizeof(current));
 
 			bool filled_next = false;
 
 			if ((ins + 1)->type == TAG_LOAD_STORE_4) {
-				midgard_load_store_word_t next = (ins + 1)->load_store;
+				midgard_load_store_word next = (ins + 1)->load_store;
 
 				/* As the two operate concurrently, make sure
 				 * they are not dependent */
@@ -1232,13 +1235,13 @@ skip_instruction:
 			if (!filled_next)
 				next64 = LDST_NOP;
 
-			midgard_load_store_t instruction = {
-				.tag = tag,
+			midgard_load_store instruction = {
+				.type = tag,
 				.word1 = current64,
 				.word2 = next64
 			};
 
-			util_dynarray_append(emission, midgard_load_store_t, instruction);
+			util_dynarray_append(emission, midgard_load_store, instruction);
 
 			break;
 		}
@@ -1427,7 +1430,8 @@ embedded_to_inline_constant(compiler_context *ctx)
 					case midgard_alu_op_fle: 
 					case midgard_alu_op_ilt: 
 					case midgard_alu_op_ile: 
-					case midgard_alu_op_csel: 
+					case midgard_alu_op_fcsel: 
+					case midgard_alu_op_icsel: 
 						printf("Missed non-commutative flip\n");
 						break;
 
@@ -1455,9 +1459,9 @@ embedded_to_inline_constant(compiler_context *ctx)
 			int component = 0;
 
 			if (ins->vector) {
-				midgard_vector_alu_src_t *src;
+				midgard_vector_alu_src *src;
 				int q = ins->vector_alu.src2;
-				midgard_vector_alu_src_t *m = (midgard_vector_alu_src_t *) &q;
+				midgard_vector_alu_src *m = (midgard_vector_alu_src *) &q;
 				src = m;
 
 				assert(!src->abs);
@@ -1486,9 +1490,9 @@ embedded_to_inline_constant(compiler_context *ctx)
 				if (is_vector)
 					continue;
 			} else {
-				midgard_scalar_alu_src_t *src;
+				midgard_scalar_alu_src *src;
 				int q = ins->scalar_alu.src2;
-				midgard_scalar_alu_src_t *m = (midgard_scalar_alu_src_t *) &q;
+				midgard_scalar_alu_src *m = (midgard_scalar_alu_src *) &q;
 				src = m;
 
 				assert(!src->abs);
@@ -1786,14 +1790,14 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 	}
 
 	if (unlikely(first_tag != TAG_LOAD_STORE_4)) {
-		midgard_load_store_t instruction = {
-			.tag = TAG_LOAD_STORE_4,
+		midgard_load_store instruction = {
+			.type = TAG_LOAD_STORE_4,
 			.word1 = 3,
 			.word2 = 3
 		};
 
 		util_dynarray_append(&tags, int, compiled->size);
-		util_dynarray_append(compiled, midgard_load_store_t, instruction);
+		util_dynarray_append(compiled, midgard_load_store, instruction);
 	}
 
 	/* Emit flat binary from the instruction array. Save instruction boundaries such that lookahead tags can be assigned easily */
