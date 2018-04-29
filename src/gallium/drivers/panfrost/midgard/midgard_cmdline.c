@@ -608,8 +608,6 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		.vector = is_vector
 	};
 
-	printf("%d, %d\n", ins.ssa_args.src0, ins.ssa_args.src1);
-
 	nir_alu_src *nirmod0 = NULL;
 	nir_alu_src *nirmod1 = NULL;
 
@@ -1112,7 +1110,6 @@ skip_instruction:
 			/* Tack on constants */
 
 			if (has_embedded_constants) {
-				printf("<%f, %f...>\n", constants[0], constants[1]);
 				EMIT_AND_COUNT(float, constants[0]);
 				EMIT_AND_COUNT(float, constants[1]);
 				EMIT_AND_COUNT(float, constants[2]);
@@ -1392,7 +1389,6 @@ embedded_to_inline_constant(compiler_context *ctx)
 				assert(src->full);
 
 				float constant = ins->constants[src->component];
-				printf("Inlining %f\n", constant);
 				uint16_t halfconstant = _mesa_float_to_half(constant);
 
 				/* Get rid of the embedded constant */
