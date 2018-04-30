@@ -1152,6 +1152,8 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 						case midgard_alu_op_ile: 
 						case midgard_alu_op_fcsel: 
 						case midgard_alu_op_icsel: 
+						case midgard_alu_op_imin:
+						case midgard_alu_op_imax:
 							ains->unit = ains->vector ? ALU_ENAB_VEC_ADD : ALU_ENAB_SCAL_MUL;
 							break;
 						case midgard_alu_op_fmul:
@@ -1567,12 +1569,13 @@ embedded_to_inline_constant(compiler_context *ctx)
 				 * vector by checking if all accessed values
 				 * (by the swizzle) are the same. */
 
-				float value = ins->constants[src->swizzle & 3];
+				uint32_t *cons = ins->constants;
+				uint32_t value = cons[src->swizzle & 3];
 
 				bool is_vector = false;
 
 				for (int c = 1; c < 4; ++c) {
-					float test = ins->constants[(src->swizzle >> (2 * c)) & 3];
+					uint32_t test = cons[(src->swizzle >> (2 * c)) & 3];
 					
 					if (test != value) {
 						is_vector = true;
