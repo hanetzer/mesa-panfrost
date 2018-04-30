@@ -1502,13 +1502,15 @@ embedded_to_inline_constant(compiler_context *ctx)
 		 * restrictions. So, if possible we try to flip the arguments
 		 * in that case */
 
+		int op = ins->vector ? ins->vector_alu.op : ins->scalar_alu.op;
+
 		if (ins->ssa_args.src0 == SSA_FIXED_REGISTER(REGISTER_CONSTANT)) {
 			if (ins->vector) {
 				printf("Maybe missed vector flip\n");
 			} else {
 				/* Flip based on op. Fallthrough intentional */
 
-				switch (ins->scalar_alu.op) {
+				switch (op) {
 					/* These ops require an operational change to flip their arguments TODO */
 					case midgard_alu_op_fne: 
 					case midgard_alu_op_flt: 
@@ -1590,13 +1592,20 @@ embedded_to_inline_constant(compiler_context *ctx)
 				component = src->component;
 			}
 
-			/* Get rid of the embedded constant */
-			float constant = ins->constants[component];
-			uint16_t halfconstant = _mesa_float_to_half(constant);
+			/* Scale constant appropriately, if we can legally */
+			uint16_t scaled_constant = 0;
 
+			/* XXX: Check legality, width */
+			if (midgard_is_integer_op(op)) {
+				scaled_constant = (uint16_t) ins->constants[component];
+			} else {
+				scaled_constant = _mesa_float_to_half((float) ins->constants[component]);
+			}
+
+			/* Get rid of the embedded constant */
 			ins->has_constants = false; 
 			ins->ssa_args.inline_constant = true;
-			ins->ssa_args.src1 = halfconstant;
+			ins->ssa_args.src1 = scaled_constant;
 		}
 	}
 }
@@ -1839,7 +1848,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 			/* Artefact of load_const, etc in the average case */
 			inline_alu_constants(ctx);
-			//embedded_to_inline_constant(ctx); /* Reenable when it's integer aware */
+			embedded_to_inline_constant(ctx); 
 			eliminate_constant_mov(ctx);
 			eliminate_varying_mov(ctx);
 
@@ -1944,6 +1953,7 @@ static const nir_shader_compiler_options nir_options = {
 	.lower_fmod32 = true,
 	.lower_fmod64 = true,
 	.lower_fdiv = true,
+	.lower_idiv = true,
 	.lower_b2f = true,
 
 	.vertex_id_zero_based = true,

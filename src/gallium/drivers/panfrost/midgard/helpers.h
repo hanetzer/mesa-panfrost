@@ -96,3 +96,40 @@
 /* See ISA notes */
 
 #define LDST_NOP (3)
+
+/* Is this opcode that of an integer? */
+static bool
+midgard_is_integer_op(int op)
+{
+	switch (op) {
+		case midgard_alu_op_iadd: 
+		case midgard_alu_op_ishladd: 
+		case midgard_alu_op_isub: 
+		case midgard_alu_op_imul: 
+		case midgard_alu_op_imin: 
+		case midgard_alu_op_imax: 
+		case midgard_alu_op_iasr: 
+		case midgard_alu_op_ilsr: 
+		case midgard_alu_op_ishl: 
+		case midgard_alu_op_iand: 
+		case midgard_alu_op_ior: 
+		case midgard_alu_op_inot: 
+		case midgard_alu_op_iandnot: 
+		case midgard_alu_op_ixor: 
+		case midgard_alu_op_imov: 
+		//case midgard_alu_op_f2i: 
+		//case midgard_alu_op_f2u: 
+		case midgard_alu_op_ieq: 
+		case midgard_alu_op_ine: 
+		case midgard_alu_op_ilt: 
+		case midgard_alu_op_ile: 
+		case midgard_alu_op_iball_eq: 
+		case midgard_alu_op_ibany_neq: 
+		//case midgard_alu_op_i2f: 
+		//case midgard_alu_op_u2f: 
+		case midgard_alu_op_icsel: 
+			return true;
+		default:
+			return false;
+	}
+}
