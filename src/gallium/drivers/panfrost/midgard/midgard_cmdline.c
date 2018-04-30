@@ -973,11 +973,13 @@ allocate_registers(compiler_context *ctx)
 				if (args.inline_constant) {
 					/* Encode inline 16-bit constant */
 
+					printf("src1: %X\n", args.src1);
 					ins->registers.src2_reg = args.src1 >> 11;
 
 					int lower_11 = args.src1 & ((1 << 12) - 1);
 
 					if (ins->vector) {
+						printf("Encoding %X\n", args.src1);
 						uint16_t imm = ((lower_11 >> 8) & 0x7) | ((lower_11 & 0xFF) << 3);
 						ins->vector_alu.src2 = imm << 2;
 					} else {
@@ -1528,6 +1530,7 @@ embedded_to_inline_constant(compiler_context *ctx)
 	util_dynarray_foreach(&ctx->current_block, midgard_instruction, ins) {
 		if (!ins->has_constants) continue;
 		if (ins->ssa_args.inline_constant) continue;
+		if (ins->unused) continue;
 
 		/* src1 cannot be an inline constant due to encoding
 		 * restrictions. So, if possible we try to flip the arguments
@@ -1639,6 +1642,7 @@ embedded_to_inline_constant(compiler_context *ctx)
 			ins->has_constants = false; 
 			ins->ssa_args.inline_constant = true;
 			ins->ssa_args.src1 = scaled_constant;
+			printf("src1 = %X\n", ins->ssa_args.src1);
 		}
 	}
 }
@@ -1881,8 +1885,8 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 			/* Artefact of load_const, etc in the average case */
 			inline_alu_constants(ctx);
-			embedded_to_inline_constant(ctx); 
 			eliminate_constant_mov(ctx);
+			embedded_to_inline_constant(ctx); 
 			eliminate_varying_mov(ctx);
 
 			/* Perform heavylifting for aliasing */
