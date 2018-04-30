@@ -1216,8 +1216,37 @@ emit_binary_instruction(compiler_context *ctx, midgard_instruction *ins, struct 
 								&register_words_count, body_words,
 								body_size, &body_words_count, &bytes_emitted);
 					} else {
-						/* Break it up into its own batch until we can do this right XXX */
-						break;
+						/* Analyse the group to see if r0 is written in full */
+						bool components[4] = { 0 };
+
+						for (int t = 0; t < index; ++t) {
+							midgard_instruction *qins = ins + t;
+							
+							if (qins->registers.out_reg != 0) continue;
+
+							if (qins->vector) {
+								int mask = qins->vector_alu.mask;
+
+								for (int c = 0; c < 4; ++c)
+									if (mask & (0x3 << (2 * c)))
+										components[c] = true;
+							} else {
+								components[qins->scalar_alu.output_component] = true;
+							}
+						}
+
+						/* If even a single component is not written, break it up (conservative check). */
+
+						bool breakup = false;
+
+						for (int c = 0; c < 4; ++c)
+							if (!components[c])
+								breakup = true;
+
+						if (breakup)
+							break;
+
+						/* Otherwise, we're free to proceed */
 					}
 
 					body_size[body_words_count] = sizeof(ains->br_compact);
