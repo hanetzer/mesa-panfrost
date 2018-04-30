@@ -425,12 +425,13 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 {
 	nir_ssa_def def = instr->def;
 
+	printf("Load %X\n", instr->value.i32[0]);
 	float *v = ralloc_array(NULL, float, 4);
 	memcpy(v, &instr->value.f32, 4 * sizeof(float));
 	_mesa_hash_table_u64_insert(ctx->ssa_constants, def.index, v);
 
 	midgard_instruction ins = v_fmov(SSA_FIXED_REGISTER(REGISTER_CONSTANT), blank_alu_src, def.index, false, midgard_outmod_none);
-	attach_constants(&ins, &instr->value.f32);
+	attach_constants(&ins, &instr->value);
 	util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 }
 
@@ -1503,6 +1504,7 @@ embedded_to_inline_constant(compiler_context *ctx)
 		 * in that case */
 
 		int op = ins->vector ? ins->vector_alu.op : ins->scalar_alu.op;
+		printf("Constant... %X\n", ((int*) ins->constants)[0]);
 
 		if (ins->ssa_args.src0 == SSA_FIXED_REGISTER(REGISTER_CONSTANT)) {
 			if (ins->vector) {
@@ -1561,17 +1563,17 @@ embedded_to_inline_constant(compiler_context *ctx)
 				assert(!src->rep_high);
 
 				/* Make sure that the constant is not itself a
-				 * vector by checking if the swizzle is
-				 * uniform. If it's not uniform, skip this
-				 * constant; we can't embed it (ignoring, uh,
-				 * int8?) */
+				 * vector by checking if all accessed values
+				 * (by the swizzle) are the same. */
 
-				component = (src->swizzle >> 6) & 3;
+				float value = ins->constants[src->swizzle & 3];
 
 				bool is_vector = false;
 
-				for (int c = 0; c < 3; ++c) {
-					if (((src->swizzle >> (2 * c)) & 3) != component) {
+				for (int c = 1; c < 4; ++c) {
+					float test = ins->constants[(src->swizzle >> (2 * c)) & 3];
+					
+					if (test != value) {
 						is_vector = true;
 						break;
 					}
@@ -1597,7 +1599,8 @@ embedded_to_inline_constant(compiler_context *ctx)
 
 			/* XXX: Check legality, width */
 			if (midgard_is_integer_op(op)) {
-				scaled_constant = (uint16_t) ins->constants[component];
+				int *iconstants = (int *) ins->constants;
+				scaled_constant = (uint16_t) iconstants[component];
 			} else {
 				scaled_constant = _mesa_float_to_half((float) ins->constants[component]);
 			}
