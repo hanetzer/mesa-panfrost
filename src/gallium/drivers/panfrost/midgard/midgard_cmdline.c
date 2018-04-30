@@ -1570,8 +1570,23 @@ embedded_to_inline_constant(compiler_context *ctx)
 					case midgard_alu_op_iand:
 					case midgard_alu_op_ior:
 					case midgard_alu_op_ixor:
+						/* Flip the SSA numbers */
 						ins->ssa_args.src0 = ins->ssa_args.src1;
 						ins->ssa_args.src1 = SSA_FIXED_REGISTER(REGISTER_CONSTANT);
+
+						/* And flip the modifiers */
+
+						unsigned src_temp;
+
+						if (ins->vector) {
+							src_temp = ins->vector_alu.src2;
+							ins->vector_alu.src2 = ins->vector_alu.src1;
+							ins->vector_alu.src1 = src_temp;
+						} else {
+							src_temp = ins->scalar_alu.src2;
+							ins->scalar_alu.src2 = ins->scalar_alu.src1;
+							ins->scalar_alu.src1 = src_temp;
+						}
 
 					default:
 						break;
