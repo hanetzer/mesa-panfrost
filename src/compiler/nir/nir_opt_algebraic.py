@@ -563,9 +563,6 @@ optimizations = [
                                                               ('extract_i8', 'v', 3))),
                                            127.0))),
      'options->lower_unpack_snorm_4x8'),
-
-    (('fsin', a), ('fsinpi', ('fdiv', a, 3.14159)), 'options->lower_fsinpi'),
-    (('fcos', a), ('fcospi', ('fdiv', a, 3.14159)), 'options->lower_fsinpi'),
 ]
 
 invert = {'feq': 'fne', 'fne': 'feq', 'fge': 'flt', 'flt': 'fge' }

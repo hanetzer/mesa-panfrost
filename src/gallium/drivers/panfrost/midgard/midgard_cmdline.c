@@ -387,6 +387,19 @@ optimise_nir(nir_shader *nir)
 				nir_var_local);
 	} while(progress);
 
+	/* Must be run at the end to prevent creation of fsin/fcos ops */
+	NIR_PASS(progress, nir, midgard_nir_scale_trig);
+
+	do {
+		progress = false;
+
+		NIR_PASS(progress, nir, nir_opt_dce);
+		NIR_PASS(progress, nir, nir_opt_algebraic);
+		NIR_PASS(progress, nir, nir_opt_constant_folding);
+		NIR_PASS(progress, nir, nir_copy_prop);
+	} while(progress);
+
+	/* Lower mods */
 	NIR_PASS(progress, nir, nir_lower_to_source_mods);
 	NIR_PASS(progress, nir, nir_copy_prop);
 	NIR_PASS(progress, nir, nir_opt_dce);
@@ -553,14 +566,8 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		ALU_CASE(ADD, 3, i2f32, i2f);
 		ALU_CASE(ADD, 3, u2f32, u2f);
 
-		// Input needs to be divided by pi due to Midgard weirdness We
-		// define special NIR ops, fsinpi and fcospi, that include the
-		// division correctly, supplying appropriately lowering passes.
-		// That way, the division by pi can take advantage of constant
-		// folding, algebraic simplifications, and so forth.
-
-		ALU_CASE(LUT, 0, fsinpi, fsin);
-		ALU_CASE(LUT, 0, fcospi, fcos);
+		ALU_CASE(LUT, 0, fsin, fsin);
+		ALU_CASE(LUT, 0, fcos, fcos);
 
 		//ALU_CASE(LUT, 0, fatan_pt1);
 
@@ -1938,7 +1945,6 @@ static const nir_shader_compiler_options nir_options = {
 	.lower_fmod64 = true,
 	.lower_fdiv = true,
 	.lower_b2f = true,
-	.lower_fsinpi = true,
 
 	.vertex_id_zero_based = true,
 	.lower_extract_byte = true,

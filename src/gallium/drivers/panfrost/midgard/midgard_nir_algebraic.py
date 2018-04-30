@@ -22,6 +22,7 @@
 
 import argparse
 import sys
+import math
 
 a = 'a'
 b = 'b'
@@ -35,6 +36,14 @@ algebraic = [
     #(('fsign@32', a), ('i2f32@32', ('isign', ('f2i32@32', ('fmul', a, 0x43800000)))))
     #(('fsign', a), ('fcsel', ('fge', a, 0), 1.0, ('fcsel', ('flt', a, 0.0), -1.0, 0.0)))
     (('fsign', a), ('bcsel', ('fge', a, 0), 1.0, -1.0))
+]
+
+# Midgard scales fsin/fcos arguments by pi.
+# Pass must be run only once, after the main loop
+
+scale_trig = [
+        (('fsin', a), ('fsin', ('fdiv', a, math.pi))),
+        (('fcos', a), ('fcos', ('fdiv', a, math.pi))),
 ]
 
 def main():
@@ -51,6 +60,9 @@ def run():
     print '#include "midgard_nir.h"'
     print nir_algebraic.AlgebraicPass("midgard_nir_lower_algebraic",
                                       algebraic).render()
+
+    print nir_algebraic.AlgebraicPass("midgard_nir_scale_trig",
+                                      scale_trig).render()
 
 
 if __name__ == '__main__':
