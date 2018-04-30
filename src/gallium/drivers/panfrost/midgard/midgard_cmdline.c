@@ -425,7 +425,6 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 {
 	nir_ssa_def def = instr->def;
 
-	printf("Load %X\n", instr->value.i32[0]);
 	float *v = ralloc_array(NULL, float, 4);
 	memcpy(v, &instr->value.f32, 4 * sizeof(float));
 	_mesa_hash_table_u64_insert(ctx->ssa_constants, def.index, v);
@@ -608,7 +607,6 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 			//alias_ssa(ctx, instr->src[0].src.ssa->index, SSA_FIXED_REGISTER(31), true);
 
 			memmove(instr->src, instr->src + 1, 2 * sizeof(nir_alu_src));
-			printf("Srcs %d %d\n", instr->src[0].src.ssa->index, instr->src[1].src.ssa->index);
 			break;
 		}
 
@@ -1507,7 +1505,6 @@ embedded_to_inline_constant(compiler_context *ctx)
 		 * in that case */
 
 		int op = ins->vector ? ins->vector_alu.op : ins->scalar_alu.op;
-		printf("Constant... %X\n", ((int*) ins->constants)[0]);
 
 		if (ins->ssa_args.src0 == SSA_FIXED_REGISTER(REGISTER_CONSTANT)) {
 			if (ins->vector) {
