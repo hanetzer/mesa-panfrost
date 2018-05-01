@@ -1539,58 +1539,54 @@ embedded_to_inline_constant(compiler_context *ctx)
 		int op = ins->vector ? ins->vector_alu.op : ins->scalar_alu.op;
 
 		if (ins->ssa_args.src0 == SSA_FIXED_REGISTER(REGISTER_CONSTANT)) {
-			if (ins->vector) {
-				printf("Maybe missed vector flip\n");
-			} else {
-				/* Flip based on op. Fallthrough intentional */
+			/* Flip based on op. Fallthrough intentional */
 
-				switch (op) {
-					/* These ops require an operational change to flip their arguments TODO */
-					case midgard_alu_op_fne: 
-					case midgard_alu_op_flt: 
-					case midgard_alu_op_fle: 
-					case midgard_alu_op_ilt: 
-					case midgard_alu_op_ile: 
-					case midgard_alu_op_fcsel: 
-					case midgard_alu_op_icsel: 
-						printf("Missed non-commutative flip\n");
-						break;
+			switch (op) {
+				/* These ops require an operational change to flip their arguments TODO */
+				case midgard_alu_op_fne: 
+				case midgard_alu_op_flt: 
+				case midgard_alu_op_fle: 
+				case midgard_alu_op_ilt: 
+				case midgard_alu_op_ile: 
+				case midgard_alu_op_fcsel: 
+				case midgard_alu_op_icsel: 
+					printf("Missed non-commutative flip\n");
+					break;
 
-					/* These ops are commutative and Just Flip */
-					case midgard_alu_op_fadd: 
-					case midgard_alu_op_fmul: 
-					case midgard_alu_op_fmin: 
-					case midgard_alu_op_fmax: 
-					case midgard_alu_op_iadd: 
-					case midgard_alu_op_isub: 
-					case midgard_alu_op_imul: 
-					case midgard_alu_op_feq: 
-					case midgard_alu_op_ieq: 
-					case midgard_alu_op_ine: 
-					case midgard_alu_op_iand:
-					case midgard_alu_op_ior:
-					case midgard_alu_op_ixor:
-						/* Flip the SSA numbers */
-						ins->ssa_args.src0 = ins->ssa_args.src1;
-						ins->ssa_args.src1 = SSA_FIXED_REGISTER(REGISTER_CONSTANT);
+				/* These ops are commutative and Just Flip */
+				case midgard_alu_op_fadd: 
+				case midgard_alu_op_fmul: 
+				case midgard_alu_op_fmin: 
+				case midgard_alu_op_fmax: 
+				case midgard_alu_op_iadd: 
+				case midgard_alu_op_isub: 
+				case midgard_alu_op_imul: 
+				case midgard_alu_op_feq: 
+				case midgard_alu_op_ieq: 
+				case midgard_alu_op_ine: 
+				case midgard_alu_op_iand:
+				case midgard_alu_op_ior:
+				case midgard_alu_op_ixor:
+					/* Flip the SSA numbers */
+					ins->ssa_args.src0 = ins->ssa_args.src1;
+					ins->ssa_args.src1 = SSA_FIXED_REGISTER(REGISTER_CONSTANT);
 
-						/* And flip the modifiers */
+					/* And flip the modifiers */
 
-						unsigned src_temp;
+					unsigned src_temp;
 
-						if (ins->vector) {
-							src_temp = ins->vector_alu.src2;
-							ins->vector_alu.src2 = ins->vector_alu.src1;
-							ins->vector_alu.src1 = src_temp;
-						} else {
-							src_temp = ins->scalar_alu.src2;
-							ins->scalar_alu.src2 = ins->scalar_alu.src1;
-							ins->scalar_alu.src1 = src_temp;
-						}
+					if (ins->vector) {
+						src_temp = ins->vector_alu.src2;
+						ins->vector_alu.src2 = ins->vector_alu.src1;
+						ins->vector_alu.src1 = src_temp;
+					} else {
+						src_temp = ins->scalar_alu.src2;
+						ins->scalar_alu.src2 = ins->scalar_alu.src1;
+						ins->scalar_alu.src1 = src_temp;
+					}
 
-					default:
-						break;
-				}
+				default:
+					break;
 			}
 		}
 
