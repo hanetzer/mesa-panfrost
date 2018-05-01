@@ -574,7 +574,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		ALU_CASE(ADD, 2, iand, iand);
 		ALU_CASE(ADD, 2, ior, ior);
 		ALU_CASE(ADD, 2, ixor, ixor);
-		ALU_CASE(MUL, 1, inot, inot);
+		ALU_CASE(MUL, 0, inot, inot);
 		ALU_CASE(ADD, 2, ishl, ishl);
 		ALU_CASE(ADD, 2, ishr, iasr);
 		ALU_CASE(ADD, 2, ushr, ilsr);
