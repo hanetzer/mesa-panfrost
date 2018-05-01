@@ -973,13 +973,11 @@ allocate_registers(compiler_context *ctx)
 				if (args.inline_constant) {
 					/* Encode inline 16-bit constant */
 
-					printf("src1: %X\n", args.src1);
 					ins->registers.src2_reg = args.src1 >> 11;
 
 					int lower_11 = args.src1 & ((1 << 12) - 1);
 
 					if (ins->vector) {
-						printf("Encoding %X\n", args.src1);
 						uint16_t imm = ((lower_11 >> 8) & 0x7) | ((lower_11 & 0xFF) << 3);
 						ins->vector_alu.src2 = imm << 2;
 					} else {
@@ -1653,7 +1651,6 @@ embedded_to_inline_constant(compiler_context *ctx)
 			ins->has_constants = false; 
 			ins->ssa_args.inline_constant = true;
 			ins->ssa_args.src1 = scaled_constant;
-			printf("src1 = %X\n", ins->ssa_args.src1);
 		}
 	}
 }
