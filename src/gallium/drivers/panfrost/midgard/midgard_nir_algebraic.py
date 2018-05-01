@@ -35,7 +35,9 @@ algebraic = [
     # XXX: We have hw ops for this, just unknown atm..
     #(('fsign@32', a), ('i2f32@32', ('isign', ('f2i32@32', ('fmul', a, 0x43800000)))))
     #(('fsign', a), ('fcsel', ('fge', a, 0), 1.0, ('fcsel', ('flt', a, 0.0), -1.0, 0.0)))
-    (('fsign', a), ('bcsel', ('fge', a, 0), 1.0, -1.0))
+    (('fsign', a), ('bcsel', ('fge', a, 0), 1.0, -1.0)),
+
+    (('b2i@32', a), ('iand', a, 1))
 ]
 
 # Midgard scales fsin/fcos arguments by pi.
