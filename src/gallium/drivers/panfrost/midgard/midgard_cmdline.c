@@ -1543,7 +1543,6 @@ embedded_to_inline_constant(compiler_context *ctx)
 
 			switch (op) {
 				/* These ops require an operational change to flip their arguments TODO */
-				case midgard_alu_op_fne: 
 				case midgard_alu_op_flt: 
 				case midgard_alu_op_fle: 
 				case midgard_alu_op_ilt: 
@@ -1555,6 +1554,7 @@ embedded_to_inline_constant(compiler_context *ctx)
 					break;
 
 				/* These ops are commutative and Just Flip */
+				case midgard_alu_op_fne: 
 				case midgard_alu_op_fadd: 
 				case midgard_alu_op_fmul: 
 				case midgard_alu_op_fmin: 
