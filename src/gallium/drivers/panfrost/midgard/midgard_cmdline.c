@@ -1550,6 +1550,7 @@ embedded_to_inline_constant(compiler_context *ctx)
 				case midgard_alu_op_ile: 
 				case midgard_alu_op_fcsel: 
 				case midgard_alu_op_icsel: 
+				case midgard_alu_op_isub: 
 					printf("Missed non-commutative flip\n");
 					break;
 
@@ -1559,7 +1560,6 @@ embedded_to_inline_constant(compiler_context *ctx)
 				case midgard_alu_op_fmin: 
 				case midgard_alu_op_fmax: 
 				case midgard_alu_op_iadd: 
-				case midgard_alu_op_isub: 
 				case midgard_alu_op_imul: 
 				case midgard_alu_op_feq: 
 				case midgard_alu_op_ieq: 
