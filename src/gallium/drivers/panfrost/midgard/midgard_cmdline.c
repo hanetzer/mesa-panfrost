@@ -774,7 +774,7 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 			offset = nir_intrinsic_base(instr) + const_offset->u32[0];
 			offset = offset * 2 + (nir_intrinsic_component(instr) / 2);
 
-			reg = instr->src[0].ssa->index;
+			reg = nir_alu_src_index(&instr->src[0]);
 
 			if (ctx->stage == MESA_SHADER_FRAGMENT) {
 				/* gl_FragColor is not emitted with load/store
@@ -1675,25 +1675,25 @@ write_transformed_position(nir_builder *b, nir_ssa_def *input_point)
 
 	/* Normalised device coordinates to screen space */
 
-	nir_ssa_def *viewport_multiplier = nir_vec4(b,
+	nir_ssa_def *viewport_multiplier = nir_vec2(b,
 			nir_fmul(b, viewport_width, nir_imm_float(b, 0.5f)),
-			nir_fmul(b, viewport_height, nir_imm_float(b, 0.5f)),
-			nir_imm_float(b, 0.0),
-			nir_imm_float(b, 0.0));
+			nir_fmul(b, viewport_height, nir_imm_float(b, 0.5f)));
 
-	nir_ssa_def *viewport_offset = nir_vec4(b, 
+	nir_ssa_def *viewport_offset = nir_vec2(b, 
 			viewport_center_x,
-			viewport_center_y,
-			nir_imm_float(b, 0.0),
-			nir_imm_float(b, 0.0));
+			viewport_center_y);
+
+	nir_ssa_def *viewport_xy = nir_fadd(b, nir_fmul(b, nir_channels(b, ndc_point, 0x3), viewport_multiplier), viewport_offset);
 
 	nir_ssa_def *depth_multiplier = nir_fmul(b, nir_fsub(b, depth_far, depth_near), nir_imm_float(b, 0.5f));
 	nir_ssa_def *depth_offset     = nir_fmul(b, nir_fadd(b, depth_far, depth_near), nir_imm_float(b, 0.5f));
 	nir_ssa_def *screen_depth     = nir_fadd(b, nir_fmul(b, nir_channel(b, ndc_point, 2), depth_multiplier), depth_offset);
 
-	nir_ssa_def *screen_space =
-		nir_fadd(b, nir_fadd(b, nir_fmul(b, ndc_point, viewport_multiplier), viewport_offset),
-			    nir_vec4(b, nir_imm_float(b, 0.0), nir_imm_float(b, 0.0), screen_depth, nir_imm_float(b, 0.0)));
+	nir_ssa_def *screen_space = nir_vec4(b, 
+			nir_channel(b, viewport_xy, 0),
+			nir_channel(b, viewport_xy, 1),
+			screen_depth,
+			nir_imm_float(b, 0.0));
 
 	/* Finally, write out the transformed values to the varying */
 
