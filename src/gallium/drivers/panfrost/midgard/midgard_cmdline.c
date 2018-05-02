@@ -1805,7 +1805,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 			}
 
 			inline_alu_constants(ctx);
-			//embedded_to_inline_constant(ctx); 
+			embedded_to_inline_constant(ctx);
 
 			//eliminate_varying_mov(ctx);
 
