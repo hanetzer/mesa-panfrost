@@ -310,9 +310,6 @@ attach_constants(midgard_instruction *ins, void *constants)
 typedef struct compiler_context {
 	gl_shader_stage stage;
 
-	/* Base register for immediate access uniforms */
-	int uniform_base;
-
 	/* List of midgard_instructions emitted for the current block */
 	struct util_dynarray current_block;
 
@@ -753,7 +750,6 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 				/* TODO: half-floats */
 				/* TODO: Spill to ld_uniform */
 
-				//int reg_slot = ctx->uniform_base + offset;
 				int reg_slot = 23 - offset;
 				
 				/* Uniform accesses are 0-cycle, since they're
@@ -1803,9 +1799,6 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 	nir_print_shader(nir, stdout);
 #endif
 
-	/* TODO: Spilling */
-	ctx->uniform_base = REGISTER_UNIFORMS - nir->num_uniforms;
-
 	nir_foreach_function(func, nir) {
 		if (!func->impl)
 			continue;
@@ -1822,9 +1815,9 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 				emit_instr(ctx, instr);
 			}
 
-			/* Artefact of load_const, etc in the average case */
 			inline_alu_constants(ctx);
 			embedded_to_inline_constant(ctx); 
+
 			eliminate_varying_mov(ctx);
 
 			/* Perform heavylifting for aliasing */
