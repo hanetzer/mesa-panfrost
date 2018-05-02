@@ -385,6 +385,8 @@ optimise_nir(nir_shader *nir)
 
 	NIR_PASS(progress, nir, nir_move_vec_src_uses_to_dest);
 	NIR_PASS(progress, nir, nir_lower_vec_to_movs);
+
+	NIR_PASS(progress, nir, nir_convert_from_ssa, true);
 }
 
 /* Front-half of aliasing the SSA slots, merely by inserting the flag in the
@@ -699,15 +701,12 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 		 * operate as if they were scalars. Lower them here by changing the
 		 * component. */
 
-		assert(instr->dest.dest.is_ssa);
 		assert(components == 0);
-
-		nir_ssa_def dest = instr->dest.dest.ssa;
 
 		uint8_t original_swizzle[4];
 		memcpy(original_swizzle, nirmod0->swizzle, sizeof(nirmod0->swizzle));
 
-		for (int i = 0; i < dest.num_components; ++i) {
+		for (int i = 0; i < nr_components; ++i) {
 			ins.vector_alu.mask = (0x3) << (2 * i); /* Mask the associated component */
 
 			for (int j = 0; j < 4; ++j)
