@@ -252,11 +252,6 @@ m_alu_vector(midgard_alu_op op, int unit, unsigned src0, midgard_vector_alu_src 
 		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, SSA_UNUSED_1, zero_alu_src, src, mod1, dest, literal, outmod); \
 	}
 
-#define M_ALU_VECTOR_2(unit, name) \
-	static midgard_instruction v_##name(unsigned src1, midgard_vector_alu_src mod1, unsigned src2, midgard_vector_alu_src mod2, unsigned dest, bool literal, midgard_outmod outmod) { \
-		return m_alu_vector(midgard_alu_op_##name, ALU_ENAB_VEC_##unit, src1, mod1, src2, mod2, dest, literal, outmod); \
-	}
-
 /* load/store instructions have both 32-bit and 16-bit variants, depending on
  * whether we are using vectors composed of highp or mediump. At the moment, we
  * don't support half-floats -- this requires changes in other parts of the
