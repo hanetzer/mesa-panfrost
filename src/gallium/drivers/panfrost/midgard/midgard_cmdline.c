@@ -420,6 +420,8 @@ alias_ssa(compiler_context *ctx, int dest, int src, bool literal_dest)
 	}
 }
 
+/* Do not actually emit a load; instead, cache the constant for inlining */
+
 static void
 emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 {
@@ -428,10 +430,6 @@ emit_load_const(compiler_context *ctx, nir_load_const_instr *instr)
 	float *v = ralloc_array(NULL, float, 4);
 	memcpy(v, &instr->value.f32, 4 * sizeof(float));
 	_mesa_hash_table_u64_insert(ctx->ssa_constants, def.index, v);
-
-	midgard_instruction ins = v_fmov(SSA_FIXED_REGISTER(REGISTER_CONSTANT), blank_alu_src, def.index, false, midgard_outmod_none);
-	attach_constants(&ins, &instr->value);
-	util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 }
 
 static unsigned
@@ -1371,9 +1369,8 @@ skip_instruction:
 }
 
 
-/* ALU instructions can inline constants, which decreases register pressure.
- * This is handled here. It does *not* remove the original move, since this is
- * not safe at this stage. eliminate_constant_mov will handle this */
+/* ALU instructions can inline or embed constants, which decreases register
+ * pressure and saves space. */
 
 #define CONDITIONAL_ATTACH(src) { \
 	void *entry = _mesa_hash_table_u64_search(ctx->ssa_constants, alu->ssa_args.src); \
@@ -1401,59 +1398,6 @@ inline_alu_constants(compiler_context *ctx)
 
 		if (!alu->ssa_args.inline_constant)
 			CONDITIONAL_ATTACH(src1);
-	}
-}
-
-/* While NIR handles this most of the time, sometimes we generate unnecessary
- * mov instructions ourselves, in particular from the load_const routine if
- * constants are inlined. As a peephole optimisation, eliminate redundant moves
- * in the current block here.
- */
-
-static void
-eliminate_constant_mov(compiler_context *ctx)
-{
-	util_dynarray_foreach(&ctx->current_block, midgard_instruction, move) {
-		/* Only interest ourselves with fmov instructions */
-		
-		if (move->type != TAG_ALU_4) continue;
-		if (move->vector && move->vector_alu.op != midgard_alu_op_fmov) continue;
-		if (!move->vector && move->scalar_alu.op != midgard_alu_op_fmov) continue;
-
-		/* If this is a literal move (used in tandem with I/O), it
-		 * cannot be removed. Similarly, if it -will- be a literal move
-		 * based on register_to_ssa, it cannot be removed. */
-		
-		if (!move->uses_ssa) continue;
-		if (move->ssa_args.literal_out) continue;
-		if (_mesa_hash_table_u64_search(ctx->register_to_ssa, move->ssa_args.dest)) continue;
-
-		unsigned target_reg = move->ssa_args.dest;
-
-		/* Scan the succeeding instructions for usage */
-
-		bool used = false;
-
-		for (midgard_instruction *candidate = (move + 1);
-		     IN_ARRAY(candidate, ctx->current_block);
-		     candidate += 1) {
-			/* If not using SSA, the sources are meaningless here */
-			if (!candidate->uses_ssa) continue;
-
-			/* Check this candidate for usage */
-
-			if (candidate->ssa_args.src0 == target_reg ||
-			    (candidate->ssa_args.src1 == target_reg && !candidate->ssa_args.inline_constant)) {
-				used = true;
-				break;
-			}
-		}
-
-		/* At this point, we know if the move is used or not. If it's
-		 * not, delete it! */
-
-		if (!used)
-			move->unused = true;
 	}
 }
 
@@ -1893,7 +1837,6 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 			/* Artefact of load_const, etc in the average case */
 			inline_alu_constants(ctx);
-			eliminate_constant_mov(ctx);
 			embedded_to_inline_constant(ctx); 
 			eliminate_varying_mov(ctx);
 
