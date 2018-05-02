@@ -47,20 +47,7 @@ bool c_do_mat_op_to_vec(struct exec_list *instructions);
 #include "midgard_nir.h"
 #include "helpers.h"
 
-// #define STAGE_PROFILING
 #define NIR_DEBUG
-
-#ifdef STAGE_PROFILING
-clock_t global_clock;
-
-#define PROFILE_POINT(name) { \
-	clock_t tmp = clock(); \
-	printf("%s: %d\n", name, tmp - global_clock); \
-	global_clock = tmp; \
-}
-#else
-#define PROFILE_POINT(name)
-#endif
 
 /* Instruction arguments represented as block-local SSA indices, rather than
  * registers. Negative values mean unused. */
@@ -1966,10 +1953,6 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-#ifdef STAGE_PROFILING
-	global_clock = clock();
-#endif
-
 	prog = standalone_compile_shader(&options, 2, &argv[1]);
 	prog->_LinkedShaders[MESA_SHADER_FRAGMENT]->Program->info.stage = MESA_SHADER_FRAGMENT;
 
@@ -1982,19 +1965,11 @@ int main(int argc, char **argv)
 
 	struct util_dynarray compiled;
 
-	PROFILE_POINT("GLSL compiled");
-
 	nir = glsl_to_nir(prog, MESA_SHADER_VERTEX, &nir_options);
-	PROFILE_POINT("Vertex NIR'ed");
 	midgard_compile_shader_nir(nir, &compiled);
-	PROFILE_POINT("Vertex compiled");
 	finalise_to_disk("/dev/shm/vertex.bin", &compiled);
-	PROFILE_POINT("Vertex written");
 
 	nir = glsl_to_nir(prog, MESA_SHADER_FRAGMENT, &nir_options);
-	PROFILE_POINT("Fragment NIR'ed");
 	midgard_compile_shader_nir(nir, &compiled);
-	PROFILE_POINT("Fragment compiled");
 	finalise_to_disk("/dev/shm/fragment.bin", &compiled);
-	PROFILE_POINT("Fragment written");
 }
