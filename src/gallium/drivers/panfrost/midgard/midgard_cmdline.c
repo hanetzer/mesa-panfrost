@@ -1739,7 +1739,6 @@ transform_position_writes(nir_shader *shader)
 	}
 }
 
-
 static void
 emit_fragment_epilogue(compiler_context *ctx)
 {
