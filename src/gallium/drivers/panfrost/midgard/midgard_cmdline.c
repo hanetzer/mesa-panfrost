@@ -382,6 +382,9 @@ optimise_nir(nir_shader *nir)
 	NIR_PASS(progress, nir, nir_lower_to_source_mods);
 	NIR_PASS(progress, nir, nir_copy_prop);
 	NIR_PASS(progress, nir, nir_opt_dce);
+
+	NIR_PASS(progress, nir, nir_move_vec_src_uses_to_dest);
+	NIR_PASS(progress, nir, nir_lower_vec_to_movs);
 }
 
 /* Front-half of aliasing the SSA slots, merely by inserting the flag in the
@@ -429,6 +432,29 @@ unit_enum_to_midgard(int unit_enum, int is_vector) {
 	}
 }
 
+/* Duplicate bits to convert sane 4-bit writemask to obscure 8-bit format */
+
+static unsigned
+expand_writemask(unsigned mask)
+{
+	unsigned o = 0;
+
+	for (int i = 0; i < 4; ++i)
+		if (mask & (1 << i))
+		       o |= (3 << (2*i));
+	
+	return o;
+}
+
+static unsigned
+nir_alu_src_index(nir_alu_src *src)
+{
+	if (src->src.is_ssa)
+		return src->src.ssa->index;
+	else
+		return 4096 + src->src.reg.reg->index;
+}
+
 /* Unit: shorthand for the unit used by this instruction (MUL, ADD, LUT).
  * Components: Number/style of arguments:
  * 	3: One-argument op with r24 (i2f, f2i)
@@ -449,49 +475,15 @@ unit_enum_to_midgard(int unit_enum, int is_vector) {
 static void
 emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 {
-	unsigned dest = instr->dest.dest.ssa.index;
+	bool is_ssa = instr->dest.dest.is_ssa;
 
-	/* lower_vec_to_moves generates really bad code, so we use the pass in Freedreno instead */
-	if ((instr->op == nir_op_vec2) ||
-		(instr->op == nir_op_vec3) ||
-		(instr->op == nir_op_vec4)) {
-
-		for (int i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
-			nir_alu_src *asrc = &instr->src[i];
-
-			int input = asrc->src.ssa->index;
-			int component = asrc->swizzle[0];
-
-			midgard_instruction ins = {
-				.type = TAG_ALU_4,
-				.unit = ALU_ENAB_SCAL_ADD,
-				.unused = false,
-				.uses_ssa = true,
-				.ssa_args = {
-					.src0 = SSA_UNUSED_1,
-					.src1 = input,
-					.dest = dest,
-				},
-				.scalar_alu = {
-					.op = midgard_alu_op_fmov,
-					.src1 = 0,
-					.src2 = scalar_move_src(component, true),
-					.outmod = midgard_outmod_none,
-					.output_full = true,
-					.output_component = i << 1 /* Skew full */
-				}
-			};
-
-			util_dynarray_append(&(ctx->current_block), midgard_instruction, ins); 
-		}
-
-		return;
-	}
+	unsigned dest = is_ssa ? instr->dest.dest.ssa.index : (4096 + instr->dest.dest.reg.reg->index);
+	unsigned nr_components = is_ssa ? instr->dest.dest.ssa.num_components : instr->dest.dest.reg.reg->num_components;
 
 	/* ALU ops are unified in NIR between scalar/vector, but partially
 	 * split in Midgard. Reconcile that here, to avoid diverging code paths
 	 */
-	bool is_vector = instr->dest.dest.ssa.num_components != 1;
+	bool is_vector = nr_components != 1;
 
 	/* Most Midgard ALU ops have a 1:1 correspondance to NIR ops; these are
 	 * supported. A few do not and are therefore commented and TODO to
@@ -571,6 +563,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 			 * shifted over one from NIR */
 
 			/* XXX: Force component correct */
+			assert (is_ssa);
 			int condition = instr->src[0].src.ssa->index;
 
 			const midgard_vector_alu_src alu_src = {
@@ -638,8 +631,8 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 	 * instructions. The latter can only be fetched if the instruction
 	 * needs it, or else we may segfault. */
 
-	unsigned src0 = instr->src[0].src.ssa->index;
-	unsigned src1 = (components == 1 || components == 2) ? instr->src[1].src.ssa->index : 0;
+	unsigned src0 = nir_alu_src_index(&instr->src[0]);
+	unsigned src1 = (components == 1 || components == 2) ? nir_alu_src_index(&instr->src[1]) : 0;
 
 	/* Rather than use the instruction generation helpers, we do it
 	 * ourselves here to avoid the mess */
@@ -676,7 +669,10 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 			.reg_mode = midgard_reg_mode_full,
 			.dest_override = midgard_dest_override_none,
 			.outmod = outmod,
-			.mask = unit == UNIT_LUT ? 0x3 : 0xFF, /* XXX */
+
+			/* Writemask only valid for non-SSA NIR */
+			.mask = is_ssa ? 0xFF : expand_writemask(instr->dest.write_mask),
+
 			.src1 = vector_alu_srco_unsigned(vector_alu_modifiers(nirmod0)),
 			.src2 = vector_alu_srco_unsigned(vector_alu_modifiers(nirmod1)),
 		};
@@ -1811,9 +1807,9 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 			}
 
 			inline_alu_constants(ctx);
-			embedded_to_inline_constant(ctx); 
+			//embedded_to_inline_constant(ctx); 
 
-			eliminate_varying_mov(ctx);
+			//eliminate_varying_mov(ctx);
 
 			/* Perform heavylifting for aliasing */
 			actualise_ssa_to_alias(ctx);
