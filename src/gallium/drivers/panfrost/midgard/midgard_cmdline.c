@@ -1671,7 +1671,7 @@ write_transformed_position(nir_builder *b, nir_ssa_def *input_point)
 	/* World space to normalised device coordinates */
 
 	nir_ssa_def *w_recip = nir_frcp(b, nir_channel(b, input_point, 3));
-	nir_ssa_def *ndc_point = nir_fmul(b, input_point, w_recip);
+	nir_ssa_def *ndc_point = nir_fmul(b, nir_channels(b, input_point, 0x7), w_recip);
 
 	/* Normalised device coordinates to screen space */
 
