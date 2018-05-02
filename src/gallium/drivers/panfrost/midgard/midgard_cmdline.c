@@ -634,7 +634,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 	 * needs it, or else we may segfault. */
 
 	unsigned src0 = nir_alu_src_index(&instr->src[0]);
-	unsigned src1 = (components == 1 || components == 2) ? nir_alu_src_index(&instr->src[1]) : 0;
+	unsigned src1 = components == 2 ? nir_alu_src_index(&instr->src[1]) : 0;
 
 	/* Rather than use the instruction generation helpers, we do it
 	 * ourselves here to avoid the mess */
