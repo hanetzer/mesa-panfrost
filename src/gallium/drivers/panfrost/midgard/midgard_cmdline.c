@@ -817,14 +817,39 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 	}
 }
 
+static unsigned
+midgard_tex_format(enum glsl_sampler_dim dim)
+{
+	switch (dim) {
+		case GLSL_SAMPLER_DIM_2D:
+			return TEXTURE_2D;
+
+		case GLSL_SAMPLER_DIM_3D:
+			return TEXTURE_3D;
+
+		default:
+			printf("Unknown sampler dim type\n");
+			return 0;
+	}
+}
+
 static void
 emit_tex(compiler_context *ctx, nir_tex_instr *instr)
 {
+	/* TODO */
+	assert (!instr->texture);
+	assert (!instr->sampler);
+	assert (!instr->texture_array_size);
+	assert (instr->op == nir_texop_tex);
+	
 	/* No helper to build texture words -- we do it all here */
 	midgard_instruction ins = {
 		.type = TAG_TEXTURE_4,
 		.texture = {
-			/* TODO */
+			.op = TEXTURE_OP_NORMAL,
+			.format = midgard_tex_format(instr->sampler_dim),
+			.texture_handle = instr->texture_index,
+			.sampler_handle = instr->sampler_index
 		}
 	};
 
