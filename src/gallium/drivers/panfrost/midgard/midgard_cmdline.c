@@ -859,6 +859,10 @@ emit_tex(compiler_context *ctx, nir_tex_instr *instr)
 			.format = midgard_tex_format(instr->sampler_dim),
 			.texture_handle = texture_index,
 			.sampler_handle = sampler_index,
+
+			/* TODO */
+			.mask = 0xF, 
+			.filter = 1,
 			
 			/* Always 1 */
 			.unknown7 = 1,
