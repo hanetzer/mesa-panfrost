@@ -1427,7 +1427,6 @@ eliminate_varying_mov(compiler_context *ctx)
 					candidate->ssa_args.dest = move->ssa_args.dest;
 					candidate->ssa_args.literal_out = true;
 					move->unused = true;
-					break;
 				}
 			}
 		}
@@ -1807,7 +1806,7 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 			inline_alu_constants(ctx);
 			embedded_to_inline_constant(ctx);
 
-			//eliminate_varying_mov(ctx);
+			eliminate_varying_mov(ctx);
 
 			/* Perform heavylifting for aliasing */
 			actualise_ssa_to_alias(ctx);
