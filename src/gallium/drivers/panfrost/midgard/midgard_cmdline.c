@@ -860,8 +860,10 @@ emit_tex(compiler_context *ctx, nir_tex_instr *instr)
 			.texture_handle = texture_index,
 			.sampler_handle = sampler_index,
 
-			/* TODO */
+			/* TODO: Don't force xyzw */
+			.swizzle = SWIZZLE(COMPONENT_X, COMPONENT_Y, COMPONENT_Z, COMPONENT_W), 
 			.mask = 0xF, 
+
 			.filter = 1,
 			
 			/* Always 1 */
