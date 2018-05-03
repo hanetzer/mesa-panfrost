@@ -864,6 +864,10 @@ emit_tex(compiler_context *ctx, nir_tex_instr *instr)
 			.swizzle = SWIZZLE(COMPONENT_X, COMPONENT_Y, COMPONENT_Z, COMPONENT_W), 
 			.mask = 0xF, 
 
+			/* TODO: half */
+			.in_reg_full = 1,
+			.out_full = 1,
+
 			.filter = 1,
 			
 			/* Always 1 */
