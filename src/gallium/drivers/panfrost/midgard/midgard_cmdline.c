@@ -330,6 +330,10 @@ typedef struct compiler_context {
 
 	/* Active register bitfield for RA */
 	unsigned used_registers : 16;
+
+	/* Used for cont/last hinting. Increase when a tex op is added.
+	 * Decrease when a tex op is removed. */
+	int texture_op_count;
 } compiler_context;
 
 static int
@@ -865,6 +869,9 @@ emit_tex(compiler_context *ctx, nir_tex_instr *instr)
 	};
 
 	util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
+
+	/* Used for .cont and .last hinting */
+	ctx->texture_op_count++;
 }
 
 static void
@@ -1388,9 +1395,17 @@ skip_instruction:
 
 		case TAG_TEXTURE_4: {
 			/* Texture instructions are easy, since there is no
-			 * pipelining nor VLIW to worry about. */
+			 * pipelining nor VLIW to worry about. We may need to set the .last flag */
 			
 			ins->texture.type = TAG_TEXTURE_4;
+
+			ctx->texture_op_count--;
+
+			if (!ctx->texture_op_count) {
+				ins->texture.cont = 0;
+				ins->texture.last = 1;
+			}
+
 	    		util_dynarray_append(emission, midgard_texture_word, ins->texture);
 			break;
 		}		
