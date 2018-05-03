@@ -837,10 +837,15 @@ static void
 emit_tex(compiler_context *ctx, nir_tex_instr *instr)
 {
 	/* TODO */
-	assert (!instr->texture);
-	assert (!instr->sampler);
+	assert (instr->texture);
+	//assert (!instr->sampler);
 	assert (!instr->texture_array_size);
 	assert (instr->op == nir_texop_tex);
+
+	int texture_index = instr->texture->var->data.location;
+
+	/* TODO: Vulkan, where texture =/= sampler */
+	int sampler_index = texture_index;
 	
 	/* No helper to build texture words -- we do it all here */
 	midgard_instruction ins = {
@@ -848,8 +853,8 @@ emit_tex(compiler_context *ctx, nir_tex_instr *instr)
 		.texture = {
 			.op = TEXTURE_OP_NORMAL,
 			.format = midgard_tex_format(instr->sampler_dim),
-			.texture_handle = instr->texture_index,
-			.sampler_handle = instr->sampler_index
+			.texture_handle = texture_index,
+			.sampler_handle = sampler_index
 		}
 	};
 
