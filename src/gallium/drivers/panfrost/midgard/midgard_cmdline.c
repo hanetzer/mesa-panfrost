@@ -105,8 +105,8 @@ typedef struct midgard_instruction {
 		midgard_load_store_word load_store;
 		midgard_scalar_alu scalar_alu;
 		midgard_vector_alu vector_alu;
+		midgard_texture_word texture;
 		uint16_t br_compact;
-		/* TODO Texture */
 	};
 } midgard_instruction;
 
@@ -811,11 +811,24 @@ emit_intrinsic(compiler_context *ctx, nir_intrinsic_instr *instr)
 
 			break;
 
-
 		default:
 			printf ("Unhandled intrinsic\n");
 			break;
 	}
+}
+
+static void
+emit_tex(compiler_context *ctx, nir_tex_instr *instr)
+{
+	/* No helper to build texture words -- we do it all here */
+	midgard_instruction ins = {
+		.type = TAG_TEXTURE_4,
+		.texture = {
+			/* TODO */
+		}
+	};
+
+	util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 }
 
 static void
@@ -837,6 +850,10 @@ emit_instr(compiler_context *ctx, struct nir_instr *instr)
 
 		case nir_instr_type_alu:
 			emit_alu(ctx, nir_instr_as_alu(instr));
+			break;
+
+		case nir_instr_type_tex:
+			emit_tex(ctx, nir_instr_as_tex(instr));
 			break;
 
 		default:
@@ -1332,6 +1349,15 @@ skip_instruction:
 
 			break;
 		}
+
+		case TAG_TEXTURE_4: {
+			/* Texture instructions are easy, since there is no
+			 * pipelining nor VLIW to worry about. */
+			
+			ins->texture.type = TAG_TEXTURE_4;
+	    		util_dynarray_append(emission, midgard_texture_word, ins->texture);
+			break;
+		}		
 
 		default:
 			printf("Unknown midgard instruction type\n");
