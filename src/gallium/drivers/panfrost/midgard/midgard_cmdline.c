@@ -854,7 +854,13 @@ emit_tex(compiler_context *ctx, nir_tex_instr *instr)
 			.op = TEXTURE_OP_NORMAL,
 			.format = midgard_tex_format(instr->sampler_dim),
 			.texture_handle = texture_index,
-			.sampler_handle = sampler_index
+			.sampler_handle = sampler_index,
+			
+			/* Always 1 */
+			.unknown7 = 1,
+
+			/* Assume we can continue; hint it out later */
+			.cont = 1,
 		}
 	};
 
