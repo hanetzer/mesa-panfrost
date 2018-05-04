@@ -1897,6 +1897,11 @@ midgard_compile_shader_nir(nir_shader *nir, struct util_dynarray *compiled)
 
 	NIR_PASS(progress, nir, nir_lower_var_copies);
 	NIR_PASS(progress, nir, nir_lower_vars_to_ssa);
+	NIR_PASS(progress, nir, nir_split_var_copies);
+	NIR_PASS(progress, nir, nir_lower_var_copies);
+	NIR_PASS(progress, nir, nir_lower_global_vars_to_local);
+	NIR_PASS(progress, nir, nir_lower_var_copies);
+	NIR_PASS(progress, nir, nir_lower_vars_to_ssa);
 
 	/* Append vertex epilogue before optimisation, so the epilogue itself
 	 * is optimised */
