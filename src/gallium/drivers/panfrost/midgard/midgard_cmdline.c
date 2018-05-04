@@ -901,11 +901,6 @@ emit_tex(compiler_context *ctx, nir_tex_instr *instr)
 			.in_reg_full = 1,
 			.out_full = 1,
 
-			/* TODO: Swizzle inputs dynamic, non-2D swizzle */
-			.in_reg_swizzle_left = COMPONENT_X,
-			.in_reg_swizzle_right = COMPONENT_Y,
-			.in_reg_swizzle_third = COMPONENT_Y,
-
 			.filter = 1,
 			
 			/* Always 1 */
@@ -915,6 +910,17 @@ emit_tex(compiler_context *ctx, nir_tex_instr *instr)
 			.cont = 1,
 		}
 	};
+	
+	/* TODO: Dynamic swizzle input selection, half-swizzles? */
+	if (instr->sampler_dim == GLSL_SAMPLER_DIM_3D) {
+		ins.texture.in_reg_swizzle_right = COMPONENT_X;
+		ins.texture.in_reg_swizzle_left = COMPONENT_Y;
+		ins.texture.in_reg_swizzle_third = COMPONENT_Z;
+	} else {
+		ins.texture.in_reg_swizzle_left = COMPONENT_X;
+		ins.texture.in_reg_swizzle_right = COMPONENT_Y;
+		ins.texture.in_reg_swizzle_third = COMPONENT_Y;
+	}
 
 	util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
 
