@@ -846,6 +846,9 @@ midgard_tex_format(enum glsl_sampler_dim dim)
 		case GLSL_SAMPLER_DIM_3D:
 			return TEXTURE_3D;
 
+		case GLSL_SAMPLER_DIM_CUBE:
+			return TEXTURE_CUBE;
+
 		default:
 			printf("Unknown sampler dim type\n");
 			return 0;
