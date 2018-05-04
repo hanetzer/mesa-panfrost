@@ -868,6 +868,11 @@ emit_tex(compiler_context *ctx, nir_tex_instr *instr)
 			.in_reg_full = 1,
 			.out_full = 1,
 
+			/* TODO: Swizzle inputs dynamic, non-2D swizzle */
+			.in_reg_swizzle_left = COMPONENT_X,
+			.in_reg_swizzle_right = COMPONENT_Y,
+			.in_reg_swizzle_third = COMPONENT_Y,
+
 			.filter = 1,
 			
 			/* Always 1 */

@@ -284,8 +284,9 @@ __attribute__((__packed__))
 #define TEXTURE_OP_TEXEL_FETCH 0x14
 
 /* Texture format types, found in format */
-#define TEXTURE_2D 0x02
-#define TEXTURE_3D 0x03
+#define TEXTURE_CUBE 0x00
+#define TEXTURE_2D   0x02
+#define TEXTURE_3D   0x03
 
 typedef struct
 __attribute__((__packed__))
@@ -319,7 +320,11 @@ __attribute__((__packed__))
 	unsigned in_reg_swizzle_right : 2;
 	unsigned in_reg_swizzle_left : 2;
 
-	unsigned unknown8  : 4;
+	/* Used as the first component for 3D, etc. Probably a dontcare for 2D?
+	 * 2D shifts over one */
+	unsigned in_reg_swizzle_third : 2;
+
+	unsigned unknown8  : 2;
 
 	unsigned out_full  : 1;
 
