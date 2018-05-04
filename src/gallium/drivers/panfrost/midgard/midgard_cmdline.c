@@ -1787,8 +1787,8 @@ write_transformed_position(nir_builder *b, nir_ssa_def *input_point)
 {
 	/* XXX: From uniforms? */
 
-	float w = 1366.0f;
-	float h = 768.0f;
+	float w = 400.0f;
+	float h = 320.0f;
 	nir_ssa_def *viewport_width = nir_imm_float(b, w);
 	nir_ssa_def *viewport_height = nir_imm_float(b, h);
 	nir_ssa_def *viewport_center_x = nir_imm_float(b, w / 2.0f);
