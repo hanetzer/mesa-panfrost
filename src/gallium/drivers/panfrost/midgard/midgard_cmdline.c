@@ -453,12 +453,27 @@ expand_writemask(unsigned mask)
 }
 
 static unsigned
+nir_src_index(nir_src *src)
+{
+	if (src->is_ssa)
+		return src->ssa->index;
+	else
+		return 4096 + src->reg.reg->index;
+}
+
+static unsigned
+nir_dest_index(nir_dest *dst)
+{
+	if (dst->is_ssa)
+		return dst->ssa.index;
+	else
+		return 4096 + dst->reg.reg->index;
+}
+
+static unsigned
 nir_alu_src_index(nir_alu_src *src)
 {
-	if (src->src.is_ssa)
-		return src->src.ssa->index;
-	else
-		return 4096 + src->src.reg.reg->index;
+	return nir_src_index(&src->src);
 }
 
 /* Unit: shorthand for the unit used by this instruction (MUL, ADD, LUT).
@@ -483,7 +498,7 @@ emit_alu(compiler_context *ctx, nir_alu_instr *instr)
 {
 	bool is_ssa = instr->dest.dest.is_ssa;
 
-	unsigned dest = is_ssa ? instr->dest.dest.ssa.index : (4096 + instr->dest.dest.reg.reg->index);
+	unsigned dest = nir_dest_index(&instr->dest.dest);
 	unsigned nr_components = is_ssa ? instr->dest.dest.ssa.num_components : instr->dest.dest.reg.reg->num_components;
 
 	/* ALU ops are unified in NIR between scalar/vector, but partially
@@ -850,6 +865,24 @@ emit_tex(compiler_context *ctx, nir_tex_instr *instr)
 
 	/* TODO: Vulkan, where texture =/= sampler */
 	int sampler_index = texture_index;
+
+	for (unsigned i = 0; i < instr->num_srcs; ++i) {
+		switch (instr->src[i].src_type) {
+			case nir_tex_src_coord: {
+				int index = nir_src_index(&instr->src[i].src);
+
+				/* Emit a move for it TODO eliminate */
+				EMIT(fmov, index, blank_alu_src, REGISTER_TEXTURE_BASE, true, midgard_outmod_none);
+
+				break;
+			}
+			default: {
+				printf("Unknown source type\n");
+				assert(0);
+				break;
+			 }
+		}
+	}
 	
 	/* No helper to build texture words -- we do it all here */
 	midgard_instruction ins = {
@@ -884,6 +917,10 @@ emit_tex(compiler_context *ctx, nir_tex_instr *instr)
 	};
 
 	util_dynarray_append(&ctx->current_block, midgard_instruction, ins);
+
+	/* Emit a move for the destination as well TODO eliminate */
+	
+	EMIT(fmov, SSA_FIXED_REGISTER(REGISTER_TEXTURE_BASE), blank_alu_src, nir_dest_index(&instr->dest), false, midgard_outmod_none);
 
 	/* Used for .cont and .last hinting */
 	ctx->texture_op_count++;
