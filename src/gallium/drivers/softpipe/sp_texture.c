@@ -46,80 +46,11 @@
 
 #include "state_tracker/sw_winsys.h"
 
-
-/**
- * Conventional allocation path for non-display textures:
- * Use a simple, maximally packed layout.
- */
-static boolean
-softpipe_resource_layout(struct pipe_screen *screen,
-                         struct softpipe_resource *spr,
-                         boolean allocate)
-{
-   struct pipe_resource *pt = &spr->base;
-   unsigned level;
-   unsigned width = pt->width0;
-   unsigned height = pt->height0;
-   unsigned depth = pt->depth0;
-   uint64_t buffer_size = 0;
-
-   for (level = 0; level <= pt->last_level; level++) {
-      unsigned slices, nblocksy;
-
-      nblocksy = util_format_get_nblocksy(pt->format, height);
-
-      if (pt->target == PIPE_TEXTURE_CUBE)
-         assert(pt->array_size == 6);
-
-      if (pt->target == PIPE_TEXTURE_3D)
-         slices = depth;
-      else
-         slices = pt->array_size;
-
-      spr->stride[level] = util_format_get_stride(pt->format, width);
-
-      spr->level_offset[level] = buffer_size;
-
-      /* if row_stride * height > SP_MAX_TEXTURE_SIZE */
-      if ((uint64_t)spr->stride[level] * nblocksy > SP_MAX_TEXTURE_SIZE) {
-         /* image too large */
-         return FALSE;
-      }
-
-      spr->img_stride[level] = spr->stride[level] * nblocksy;
-
-      buffer_size += (uint64_t) spr->img_stride[level] * slices;
-
-      width  = u_minify(width, 1);
-      height = u_minify(height, 1);
-      depth = u_minify(depth, 1);
-   }
-
-   if (buffer_size > SP_MAX_TEXTURE_SIZE)
-      return FALSE;
-
-   if (allocate) {
-      spr->data = align_malloc(buffer_size, 64);
-      return spr->data != NULL;
-   }
-   else {
-      return TRUE;
-   }
-}
-
-
-/**
- * Check the size of the texture specified by 'res'.
- * \return TRUE if OK, FALSE if too large.
- */
 static boolean
 softpipe_can_create_resource(struct pipe_screen *screen,
                              const struct pipe_resource *res)
 {
-   struct softpipe_resource spr;
-   memset(&spr, 0, sizeof(spr));
-   spr.base = *res;
-   return softpipe_resource_layout(screen, &spr, FALSE);
+   return TRUE;
 }
 
 
@@ -181,10 +112,6 @@ softpipe_resource_create_front(struct pipe_screen *screen,
 			 PIPE_BIND_SCANOUT |
 			 PIPE_BIND_SHARED)) {
       if (!softpipe_displaytarget_layout(screen, spr, map_front_private))
-         goto fail;
-   }
-   else {
-      if (!softpipe_resource_layout(screen, spr, TRUE))
          goto fail;
    }
     

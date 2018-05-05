@@ -163,6 +163,7 @@ softpipe_create_context(struct pipe_screen *screen,
    softpipe_init_texture_funcs( &softpipe->pipe );
    softpipe_init_vertex_funcs(&softpipe->pipe);
    softpipe_init_shader_funcs(&softpipe->pipe);
+   softpipe_init_sampler_funcs(&softpipe->pipe);
 
    softpipe->pipe.set_framebuffer_state = softpipe_set_framebuffer_state;
 

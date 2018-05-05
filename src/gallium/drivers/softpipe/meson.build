@@ -39,6 +39,7 @@ files_softpipe = files(
   'sp_state_blend.c',
   'sp_state_clip.c',
   'sp_state.h',
+  'sp_state_sampler.c',
   'sp_state_rasterizer.c',
   'sp_state_so.c',
   'sp_state_surface.c',
