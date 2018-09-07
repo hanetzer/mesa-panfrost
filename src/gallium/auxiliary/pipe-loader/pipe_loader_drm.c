@@ -111,6 +111,11 @@ static const struct drm_driver_descriptor driver_descriptors[] = {
         .configuration = pipe_default_configuration_query,
     },
     {
+       .driver_name = "rockchip",
+        .create_screen = pipe_rockchip_create_screen,
+        .configuration = pipe_default_configuration_query,
+    },
+    {
         .driver_name = "virtio_gpu",
         .create_screen = pipe_virgl_create_screen,
         .configuration = pipe_default_configuration_query,
@@ -123,6 +128,11 @@ static const struct drm_driver_descriptor driver_descriptors[] = {
     {
         .driver_name = "vc5",
         .create_screen = pipe_vc5_create_screen,
+        .configuration = pipe_default_configuration_query,
+    },
+    {
+        .driver_name = "panfrost",
+        .create_screen = pipe_panfrost_create_screen,
         .configuration = pipe_default_configuration_query,
     },
     {

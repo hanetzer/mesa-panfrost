@@ -18,6 +18,10 @@
 #include "softpipe/sp_public.h"
 #endif
 
+#ifdef GALLIUM_PANFROST
+#include "panfrost/pan_public.h"
+#endif
+
 #ifdef GALLIUM_LLVMPIPE
 #include "llvmpipe/lp_public.h"
 #endif
@@ -55,6 +59,11 @@ sw_screen_create_named(struct sw_winsys *winsys, const char *driver)
       screen = swr_create_screen(winsys);
 #endif
 
+#if defined(GALLIUM_PANFROST)
+   if (screen == NULL && strcmp(driver, "panfrost") == 0)
+      screen = panfrost_create_screen(winsys);
+#endif
+
    return screen;
 }
 
@@ -71,6 +80,8 @@ sw_screen_create(struct sw_winsys *winsys)
    default_driver = "softpipe";
 #elif defined(GALLIUM_SWR)
    default_driver = "swr";
+#elif defined(GALLIUM_PANFROST)
+   default_driver = "panfrost";
 #else
    default_driver = "";
 #endif

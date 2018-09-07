@@ -43,6 +43,12 @@ struct pipe_screen *
 pipe_vc5_create_screen(int fd, const struct pipe_screen_config *config);
 
 struct pipe_screen *
+pipe_rockchip_create_screen(int fd, const struct pipe_screen_config *config);
+
+struct pipe_screen *
+pipe_panfrost_create_screen(int fd, const struct pipe_screen_config *config);
+
+struct pipe_screen *
 pipe_pl111_create_screen(int fd, const struct pipe_screen_config *config);
 
 struct pipe_screen *

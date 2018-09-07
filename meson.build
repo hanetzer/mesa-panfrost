@@ -130,11 +130,13 @@ endif
 
 with_gallium = false
 with_gallium_pl111 = false
+with_gallium_rockchip = false
 with_gallium_radeonsi = false
 with_gallium_r300 = false
 with_gallium_r600 = false
 with_gallium_nouveau = false
 with_gallium_freedreno = false
+with_gallium_panfrost = false
 with_gallium_softpipe = false
 with_gallium_vc4 = false
 with_gallium_vc5 = false
@@ -156,7 +158,7 @@ if _drivers.contains('auto')
     elif ['arm', 'aarch64'].contains(host_machine.cpu_family())
       _drivers = [
         'pl111', 'vc4', 'vc5', 'freedreno', 'etnaviv', 'imx', 'nouveau',
-        'tegra', 'virgl', 'swrast',
+        'tegra', 'virgl', 'swrast', 'panfrost', 'rockchip'
       ]
     else
       error('Unknown architecture. Please pass -Dgallium-drivers to set driver options. Patches gladly accepted to fix this.')
@@ -169,6 +171,7 @@ if _drivers.contains('auto')
 endif
 if _drivers != ['']
   with_gallium_pl111 = _drivers.contains('pl111')
+  with_gallium_rockchip = _drivers.contains('rockchip')
   with_gallium_radeonsi = _drivers.contains('radeonsi')
   with_gallium_r300 = _drivers.contains('r300')
   with_gallium_r600 = _drivers.contains('r600')
@@ -177,6 +180,7 @@ if _drivers != ['']
   with_gallium_softpipe = _drivers.contains('swrast')
   with_gallium_vc4 = _drivers.contains('vc4')
   with_gallium_vc5 = _drivers.contains('vc5')
+  with_gallium_panfrost = _drivers.contains('panfrost')
   with_gallium_etnaviv = _drivers.contains('etnaviv')
   with_gallium_imx = _drivers.contains('imx')
   with_gallium_tegra = _drivers.contains('tegra')
@@ -232,6 +236,9 @@ if with_gallium_pl111 and not with_gallium_vc4
 endif
 if with_gallium_tegra and not with_gallium_nouveau
   error('tegra driver requires nouveau driver')
+endif
+if with_gallium_rockchip and not with_gallium_panfrost
+  error('rockchip driver requires panfrost driver')
 endif
 
 if host_machine.system() == 'darwin'

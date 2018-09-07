@@ -106,6 +106,29 @@ pipe_pl111_create_screen(int fd, const struct pipe_screen_config *config)
 
 #endif
 
+#ifdef GALLIUM_ROCKCHIP
+#include "rockchip/drm/rockchip_drm_public.h"
+
+struct pipe_screen *
+pipe_rockchip_create_screen(int fd, const struct pipe_screen_config *config)
+{
+   struct pipe_screen *screen;
+
+   screen = rockchip_drm_screen_create(fd);
+   return screen ? debug_screen_wrap(screen) : NULL;
+}
+
+#else
+
+struct pipe_screen *
+pipe_rockchip_create_screen(int fd, const struct pipe_screen_config *config)
+{
+   fprintf(stderr, "rockchip: driver missing\n");
+   return NULL;
+}
+
+#endif
+
 #ifdef GALLIUM_R300
 #include "radeon/radeon_winsys.h"
 #include "radeon/drm/radeon_drm_public.h"
@@ -351,6 +374,29 @@ struct pipe_screen *
 pipe_etna_create_screen(int fd, const struct pipe_screen_config *config)
 {
    fprintf(stderr, "etnaviv: driver missing\n");
+   return NULL;
+}
+
+#endif
+
+#if 0
+#include "panfrost/drm/panfrost_drm_public.h"
+
+struct pipe_screen *
+pipe_panfrost_create_screen(int fd, const struct pipe_screen_config *config)
+{
+   struct pipe_screen *screen;
+
+   screen = panfrost_drm_screen_create(fd);
+   return screen ? debug_screen_wrap(screen) : NULL;
+}
+
+#else
+
+struct pipe_screen *
+pipe_panfrost_create_screen(int fd, const struct pipe_screen_config *config)
+{
+   fprintf(stderr, "panfrost: driver missing\n");
    return NULL;
 }
 
