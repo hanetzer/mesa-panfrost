@@ -58,11 +58,12 @@ libgallium_dri = shared_library(
     driver_swrast, driver_r300, driver_r600, driver_radeonsi, driver_nouveau,
     driver_pl111, driver_v3d, driver_vc4, driver_freedreno, driver_etnaviv,
     driver_imx, driver_tegra, driver_i915, driver_svga, driver_virgl,
-    driver_swr,
+    driver_swr, driver_panfrost, driver_rockchip
   ],
 )
 
 foreach d : [[with_gallium_pl111, 'pl111_dri.so'],
+             [with_gallium_rockchip, 'rockchip_dri.so'],
              [with_gallium_radeonsi, 'radeonsi_dri.so'],
              [with_gallium_nouveau, 'nouveau_dri.so'],
              [with_gallium_freedreno, ['msm_dri.so', 'kgsl_dri.so']],
@@ -70,6 +71,7 @@ foreach d : [[with_gallium_pl111, 'pl111_dri.so'],
              [with_gallium_softpipe and with_gallium_drisw_kms, 'kms_swrast_dri.so'],
              [with_gallium_v3d, 'v3d_dri.so'],
              [with_gallium_vc4, 'vc4_dri.so'],
+             [with_gallium_panfrost, 'panfrost_dri.so'],
              [with_gallium_etnaviv, 'etnaviv_dri.so'],
              [with_gallium_imx, 'imx-drm_dri.so'],
              [with_gallium_tegra, 'tegra_dri.so'],
