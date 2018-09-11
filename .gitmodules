@@ -1,0 +1,3 @@
+[submodule "src/gallium/drivers/panfrost"]
+	path = src/gallium/drivers/panfrost
+	url = https://github.com/hanetzer/panfrost.git
